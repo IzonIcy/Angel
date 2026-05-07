@@ -2,10 +2,17 @@ import type { Database } from "bun:sqlite";
 import { existsSync, mkdirSync, readFileSync } from "fs";
 import { join } from "path";
 import type { AngelConfig } from "./config";
-import { loadSession, logUsage, saveSession, storeMessage } from "./db";
+import {
+  loadSession,
+  logSystemEvent,
+  logUsage,
+  saveSession,
+  storeMessage,
+} from "./db";
 import { runHook } from "./hooks";
 import { chatComplete, type LlmMessage } from "./llm";
 import { buildMemoryContext } from "./memory";
+import { checkBudgetGuardrail, resolveModelForContext } from "./model_router";
 import type { ToolContext, ToolRegistry } from "./tools/registry";
 
 export interface AgentOptions {
@@ -23,6 +30,7 @@ export interface AgentOptions {
   usedSendMessage?: { value: boolean };
   senderName?: string;
   senderDmId?: string;
+  contextTag?: string;
 }
 
 export const INTERRUPTED = Symbol("interrupted");
@@ -76,7 +84,7 @@ Be warm and conversational, not like a form. Ask 2-3 questions at a time max. Us
   }
 
   if (messages.length > config.compaction_threshold) {
-    messages = await compactMessages(messages, config);
+    messages = await compactMessages(messages, config, db, chatId);
   }
 
   const tools = registry.getDefinitions();
@@ -101,8 +109,34 @@ Be warm and conversational, not like a form. Ask 2-3 questions at a time max. Us
       ...messages,
     ];
 
+    const budgetCheck = checkBudgetGuardrail(db, config, chatId);
+    if (!budgetCheck.allowed) {
+      finalText = `I can't continue right now: ${budgetCheck.reason}.`;
+      logSystemEvent(
+        db,
+        "budget_guardrail_block",
+        "warn",
+        budgetCheck.reason || "daily budget exceeded",
+        channel,
+      );
+      messages.push({ role: "assistant", content: finalText });
+      break;
+    }
+
+    const modelContext =
+      opts.contextTag ||
+      (opts.isOnboarding
+        ? "onboarding"
+        : iterations > 0
+          ? "tool_loop"
+          : "interactive");
+    const selectedModel =
+      getChatModelOverride(db, chatId) ||
+      resolveModelForContext(config, modelContext);
+
     const start = Date.now();
     const response = await chatComplete(config, allMessages, tools, {
+      model: selectedModel,
       onTextDelta: opts.onTextDelta,
     });
     const durationMs = Date.now() - start;
@@ -110,10 +144,11 @@ Be warm and conversational, not like a form. Ask 2-3 questions at a time max. Us
     logUsage(
       db,
       chatId,
-      config.model,
+      selectedModel,
       response.usage.inputTokens,
       response.usage.outputTokens,
       durationMs,
+      modelContext,
     );
 
     if (response.toolCalls.length === 0) {
@@ -150,6 +185,7 @@ Be warm and conversational, not like a form. Ask 2-3 questions at a time max. Us
       workingDir,
       db,
       config,
+      actorId: opts.senderName,
       registry,
       sendIntermediate: opts.sendIntermediate,
     };
@@ -360,6 +396,8 @@ function resolveWorkingDir(
 async function compactMessages(
   messages: LlmMessage[],
   config: AngelConfig,
+  db: Database,
+  chatId: number,
 ): Promise<LlmMessage[]> {
   const keepRecent = config.compaction_keep_recent;
   if (messages.length <= keepRecent + 2) return messages;
@@ -385,9 +423,24 @@ async function compactMessages(
   ];
 
   try {
+    const budgetCheck = checkBudgetGuardrail(db, config, chatId);
+    if (!budgetCheck.allowed) return recent;
+
+    const model = resolveModelForContext(config, "compaction");
+    const start = Date.now();
     const response = await chatComplete(config, summaryPrompt, [], {
+      model,
       maxTokens: 1024,
     });
+    logUsage(
+      db,
+      chatId,
+      model,
+      response.usage.inputTokens,
+      response.usage.outputTokens,
+      Date.now() - start,
+      "compaction",
+    );
     return [
       {
         role: "user",
@@ -403,6 +456,13 @@ async function compactMessages(
   } catch {
     return recent;
   }
+}
+
+function getChatModelOverride(db: Database, chatId: number): string | null {
+  const row = db
+    .query("SELECT model_override FROM sessions WHERE chat_id = ?")
+    .get(chatId) as { model_override: string | null } | null;
+  return row?.model_override || null;
 }
 
 function toolCallFingerprint(

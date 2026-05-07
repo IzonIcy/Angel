@@ -510,9 +510,7 @@ export const sendProcessInputTool: Tool = {
 
     try {
       const text = input.raw ? input.input : input.input + "\n";
-      const writer = entry.process.stdin.getWriter();
-      await writer.write(new TextEncoder().encode(text));
-      writer.releaseLock();
+      (entry.process.stdin as any).write(text);
 
       return {
         output: `Sent ${text.length} bytes to process #${input.id}`,

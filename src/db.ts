@@ -27,7 +27,7 @@ function migrate(db: Database) {
     .get() as { value: string } | null;
   const current = version ? parseInt(version.value, 10) : 0;
 
-  const migrations = [migrationV1, migrationV2];
+  const migrations = [migrationV1, migrationV2, migrationV3];
 
   for (let i = current; i < migrations.length; i++) {
     migrations[i](db);
@@ -211,6 +211,171 @@ function migrationV2(_db: Database) {
   // Kept as empty migration to preserve schema_version numbering.
 }
 
+function migrationV3(db: Database) {
+  addColumnIfMissing(db, "scheduled_tasks", "fallback_prompt", "TEXT");
+  addColumnIfMissing(db, "memories", "pinned", "INTEGER DEFAULT 0");
+  addColumnIfMissing(db, "memories", "source_of_truth", "TEXT");
+  addColumnIfMissing(db, "memories", "contradiction_key", "TEXT");
+  addColumnIfMissing(
+    db,
+    "memories",
+    "decay_half_life_days",
+    "INTEGER DEFAULT 45",
+  );
+
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS goals (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      chat_id INTEGER REFERENCES chats(id),
+      name TEXT NOT NULL,
+      outcome TEXT NOT NULL,
+      status TEXT DEFAULT 'active',
+      created_at TEXT DEFAULT (datetime('now')),
+      updated_at TEXT DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_goals_chat ON goals(chat_id, status);
+
+    CREATE TABLE IF NOT EXISTS goal_tasks (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      goal_id INTEGER NOT NULL REFERENCES goals(id) ON DELETE CASCADE,
+      title TEXT NOT NULL,
+      details TEXT,
+      status TEXT DEFAULT 'pending',
+      dependency_task_ids TEXT DEFAULT '[]',
+      checkpoint_order INTEGER DEFAULT 0,
+      created_at TEXT DEFAULT (datetime('now')),
+      updated_at TEXT DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_goal_tasks_goal ON goal_tasks(goal_id, status);
+
+    CREATE TABLE IF NOT EXISTS goal_checkpoints (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      goal_id INTEGER NOT NULL REFERENCES goals(id) ON DELETE CASCADE,
+      title TEXT NOT NULL,
+      summary TEXT,
+      created_at TEXT DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_goal_checkpoints_goal ON goal_checkpoints(goal_id);
+
+    CREATE TABLE IF NOT EXISTS execution_policies (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL UNIQUE,
+      type TEXT NOT NULL CHECK(type IN ('approval', 'permission')),
+      action TEXT NOT NULL CHECK(action IN ('allow', 'deny', 'require_confirmation')),
+      enabled INTEGER DEFAULT 1,
+      tool_name TEXT,
+      risk_level TEXT,
+      channel TEXT,
+      actor_id TEXT,
+      path_pattern TEXT,
+      domain_pattern TEXT,
+      note TEXT,
+      created_at TEXT DEFAULT (datetime('now')),
+      updated_at TEXT DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_policies_scope ON execution_policies(enabled, type, tool_name, risk_level, channel, actor_id);
+
+    CREATE TABLE IF NOT EXISTS knowledge_connectors (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL UNIQUE,
+      type TEXT NOT NULL,
+      config_json TEXT NOT NULL DEFAULT '{}',
+      status TEXT DEFAULT 'active',
+      last_synced_at TEXT,
+      last_error TEXT,
+      created_at TEXT DEFAULT (datetime('now')),
+      updated_at TEXT DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS knowledge_documents (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      connector_id INTEGER NOT NULL REFERENCES knowledge_connectors(id) ON DELETE CASCADE,
+      external_id TEXT NOT NULL,
+      title TEXT NOT NULL,
+      content TEXT NOT NULL,
+      url TEXT,
+      checksum TEXT,
+      updated_at TEXT DEFAULT (datetime('now')),
+      UNIQUE(connector_id, external_id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_knowledge_docs_connector ON knowledge_documents(connector_id);
+
+    CREATE TABLE IF NOT EXISTS workflow_recipes (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      chat_id INTEGER REFERENCES chats(id),
+      name TEXT NOT NULL,
+      description TEXT,
+      steps_json TEXT NOT NULL DEFAULT '[]',
+      enabled INTEGER DEFAULT 1,
+      created_at TEXT DEFAULT (datetime('now')),
+      updated_at TEXT DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS workflow_runs (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      recipe_id INTEGER NOT NULL REFERENCES workflow_recipes(id) ON DELETE CASCADE,
+      chat_id INTEGER,
+      status TEXT DEFAULT 'running',
+      started_at TEXT DEFAULT (datetime('now')),
+      finished_at TEXT,
+      result_summary TEXT,
+      error_text TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_workflow_runs_recipe ON workflow_runs(recipe_id, started_at);
+
+    CREATE TABLE IF NOT EXISTS proactive_rules (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      chat_id INTEGER REFERENCES chats(id),
+      name TEXT NOT NULL,
+      trigger_type TEXT NOT NULL CHECK(trigger_type IN ('cron', 'inactivity')),
+      cron_expr TEXT,
+      threshold_minutes INTEGER,
+      message_template TEXT NOT NULL,
+      status TEXT DEFAULT 'active',
+      next_run_at TEXT,
+      created_at TEXT DEFAULT (datetime('now')),
+      last_triggered_at TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_proactive_status ON proactive_rules(status, next_run_at);
+
+    CREATE TABLE IF NOT EXISTS system_events (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      event_type TEXT NOT NULL,
+      severity TEXT NOT NULL DEFAULT 'info',
+      context TEXT,
+      details TEXT,
+      created_at TEXT DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_system_events_created ON system_events(created_at, severity);
+
+    CREATE TABLE IF NOT EXISTS tool_execution_logs (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      chat_id INTEGER,
+      actor_id TEXT,
+      channel TEXT,
+      tool_name TEXT NOT NULL,
+      success INTEGER NOT NULL,
+      duration_ms INTEGER NOT NULL,
+      error_text TEXT,
+      created_at TEXT DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_tool_exec_created ON tool_execution_logs(created_at, tool_name, success);
+  `);
+}
+
+function addColumnIfMissing(
+  db: Database,
+  table: string,
+  column: string,
+  definition: string,
+) {
+  const rows = db.query(`PRAGMA table_info(${table})`).all() as Array<{
+    name: string;
+  }>;
+  if (rows.some((r) => r.name === column)) return;
+  db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
+}
+
 export function upsertChat(
   db: Database,
   channel: string,
@@ -375,10 +540,19 @@ export function createScheduledTask(
   cronExpr: string | null,
   nextRunAt: string,
   timezone = "UTC",
+  fallbackPrompt?: string,
 ): number {
   db.run(
-    `INSERT INTO scheduled_tasks (chat_id, name, prompt, cron_expr, next_run_at, timezone) VALUES (?, ?, ?, ?, ?, ?)`,
-    [chatId, name, prompt, cronExpr, toSqliteDatetime(nextRunAt), timezone],
+    `INSERT INTO scheduled_tasks (chat_id, name, prompt, cron_expr, next_run_at, timezone, fallback_prompt) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    [
+      chatId,
+      name,
+      prompt,
+      cronExpr,
+      toSqliteDatetime(nextRunAt),
+      timezone,
+      fallbackPrompt || null,
+    ],
   );
   return (db.query("SELECT last_insert_rowid() as id").get() as { id: number })
     .id;
@@ -411,6 +585,7 @@ export function updateScheduledTask(
     cron_expr?: string | null;
     next_run_at?: string;
     timezone?: string;
+    fallback_prompt?: string | null;
   },
 ) {
   const sets: string[] = [];
@@ -434,6 +609,10 @@ export function updateScheduledTask(
   if (fields.timezone !== undefined) {
     sets.push("timezone = ?");
     params.push(fields.timezone);
+  }
+  if (fields.fallback_prompt !== undefined) {
+    sets.push("fallback_prompt = ?");
+    params.push(fields.fallback_prompt);
   }
   if (sets.length === 0) return;
   params.push(taskId);
@@ -462,4 +641,191 @@ export function getUsageStats(db: Database, days = 30): any[] {
      GROUP BY model ORDER BY total_input DESC`,
     )
     .all(days);
+}
+
+export function getUsageTotalsForWindow(
+  db: Database,
+  days = 1,
+  chatId?: number,
+): { input: number; output: number; total: number } {
+  const whereChat = chatId ? "AND chat_id = ?" : "";
+  const row = db
+    .query(
+      `SELECT
+         COALESCE(SUM(input_tokens), 0) as input,
+         COALESCE(SUM(output_tokens), 0) as output,
+         COALESCE(SUM(input_tokens + output_tokens), 0) as total
+       FROM llm_usage_logs
+       WHERE created_at >= datetime('now', '-' || ? || ' days')
+       ${whereChat}`,
+    )
+    .get(...(chatId ? [days, chatId] : [days])) as {
+    input: number;
+    output: number;
+    total: number;
+  };
+
+  return row || { input: 0, output: 0, total: 0 };
+}
+
+export function logSystemEvent(
+  db: Database,
+  eventType: string,
+  severity: "info" | "warn" | "error",
+  details: string,
+  context?: string,
+) {
+  db.run(
+    "INSERT INTO system_events (event_type, severity, context, details) VALUES (?, ?, ?, ?)",
+    [eventType, severity, context || null, details],
+  );
+}
+
+export function logToolExecution(
+  db: Database,
+  args: {
+    chatId: number;
+    actorId?: string;
+    channel: string;
+    toolName: string;
+    success: boolean;
+    durationMs: number;
+    errorText?: string;
+  },
+) {
+  db.run(
+    `INSERT INTO tool_execution_logs (chat_id, actor_id, channel, tool_name, success, duration_ms, error_text)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    [
+      args.chatId,
+      args.actorId || null,
+      args.channel,
+      args.toolName,
+      args.success ? 1 : 0,
+      args.durationMs,
+      args.errorText || null,
+    ],
+  );
+}
+
+export function getObservabilitySnapshot(db: Database): {
+  usage24h: { input: number; output: number; total: number };
+  toolCalls24h: number;
+  toolErrors24h: number;
+  failedTasks24h: number;
+  pendingConfirmations: number;
+  activeScheduledTasks: number;
+  liveRuns: number;
+  queueDepth: number;
+  recentFailures24h: number;
+  channelHealth: Array<{
+    channel: string;
+    status: "ok" | "degraded" | "unknown";
+    chats: number;
+    errors24h: number;
+    lastErrorAt: string | null;
+  }>;
+} {
+  const usage24h = getUsageTotalsForWindow(db, 1);
+  const toolRow = db
+    .query(
+      `SELECT
+         COUNT(*) as calls,
+         SUM(CASE WHEN success = 0 THEN 1 ELSE 0 END) as errors
+       FROM tool_execution_logs
+       WHERE created_at >= datetime('now', '-1 days')`,
+    )
+    .get() as { calls: number; errors: number } | null;
+  const failedTasks = db
+    .query(
+      "SELECT COUNT(*) as count FROM task_run_logs WHERE success = 0 AND started_at >= datetime('now', '-1 days')",
+    )
+    .get() as { count: number };
+  const pendingConfirmations = db
+    .query(
+      "SELECT COUNT(*) as count FROM pending_confirmations WHERE status = 'pending'",
+    )
+    .get() as { count: number };
+  const activeTasks = db
+    .query(
+      "SELECT COUNT(*) as count FROM scheduled_tasks WHERE status = 'active'",
+    )
+    .get() as { count: number };
+  const dueTasks = db
+    .query(
+      "SELECT COUNT(*) as count FROM scheduled_tasks WHERE status = 'active' AND next_run_at <= datetime('now')",
+    )
+    .get() as { count: number };
+  const runningWorkflows = db
+    .query(
+      "SELECT COUNT(*) as count FROM workflow_runs WHERE status = 'running'",
+    )
+    .get() as { count: number };
+  const runningSubagents = db
+    .query(
+      "SELECT COUNT(*) as count FROM subagent_runs WHERE status = 'running'",
+    )
+    .get() as { count: number };
+  const systemErrors = db
+    .query(
+      "SELECT COUNT(*) as count FROM system_events WHERE severity = 'error' AND created_at >= datetime('now', '-1 days')",
+    )
+    .get() as { count: number };
+  const channels = db
+    .query("SELECT channel, COUNT(*) as chats FROM chats GROUP BY channel")
+    .all() as Array<{ channel: string; chats: number }>;
+  const channelEvents = db
+    .query(
+      `SELECT context as channel, MAX(created_at) as lastEventAt
+       FROM system_events
+       WHERE event_type IN ('channel_started', 'channel_start_failed')
+         AND context IS NOT NULL
+       GROUP BY context`,
+    )
+    .all() as Array<{ channel: string; lastEventAt: string }>;
+  const channelErrors = db
+    .query(
+      `SELECT context as channel, COUNT(*) as errors24h, MAX(created_at) as lastErrorAt
+       FROM system_events
+       WHERE severity = 'error'
+         AND context IS NOT NULL
+         AND created_at >= datetime('now', '-1 days')
+       GROUP BY context`,
+    )
+    .all() as Array<{
+    channel: string;
+    errors24h: number;
+    lastErrorAt: string | null;
+  }>;
+  const errorByChannel = new Map(channelErrors.map((c) => [c.channel, c]));
+  const channelNames = new Set([
+    ...channels.map((c) => c.channel),
+    ...channelEvents.map((c) => c.channel),
+  ]);
+  const chatsByChannel = new Map(channels.map((c) => [c.channel, c.chats]));
+  const channelHealth = [...channelNames].map((channel) => {
+    const chats = chatsByChannel.get(channel) || 0;
+    const errors = errorByChannel.get(channel);
+    return {
+      channel,
+      status: errors?.errors24h ? ("degraded" as const) : ("ok" as const),
+      chats,
+      errors24h: errors?.errors24h || 0,
+      lastErrorAt: errors?.lastErrorAt || null,
+    };
+  });
+
+  return {
+    usage24h,
+    toolCalls24h: toolRow?.calls || 0,
+    toolErrors24h: toolRow?.errors || 0,
+    failedTasks24h: failedTasks.count,
+    pendingConfirmations: pendingConfirmations.count,
+    activeScheduledTasks: activeTasks.count,
+    liveRuns: runningWorkflows.count + runningSubagents.count,
+    queueDepth: dueTasks.count,
+    recentFailures24h:
+      (toolRow?.errors || 0) + failedTasks.count + systemErrors.count,
+    channelHealth,
+  };
 }

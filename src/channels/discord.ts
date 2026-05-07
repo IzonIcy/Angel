@@ -8,9 +8,8 @@ export class DiscordChannel implements ChannelAdapter {
   private handler: MessageHandler | null = null;
   private token: string;
 
-  constructor(token: string, botUsername?: string) {
+  constructor(token: string, _botUsername?: string) {
     this.token = token;
-    this.botUsername = botUsername || "angel";
   }
 
   async start(onMessage: MessageHandler) {

@@ -86,9 +86,7 @@ async function sendMcpRequest(
   const id = requestId++;
   const msg = JSON.stringify({ jsonrpc: "2.0", id, method, params }) + "\n";
 
-  const writer = proc.stdin.getWriter();
-  await writer.write(new TextEncoder().encode(msg));
-  writer.releaseLock();
+  proc.stdin.write(msg);
 
   return new Promise((resolve, reject) => {
     const timeout = setTimeout(() => reject(new Error("MCP timeout")), 30000);
@@ -129,9 +127,7 @@ async function sendMcpNotification(
   params: any,
 ): Promise<void> {
   const msg = JSON.stringify({ jsonrpc: "2.0", method, params }) + "\n";
-  const writer = proc.stdin.getWriter();
-  await writer.write(new TextEncoder().encode(msg));
-  writer.releaseLock();
+  proc.stdin.write(msg);
 }
 
 export async function shutdownMcpServers() {

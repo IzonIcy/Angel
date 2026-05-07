@@ -1,4 +1,3 @@
-import type { ChildProcess } from "bun";
 import type { ChannelAdapter, IncomingMessage, MessageHandler } from "./types";
 
 type IMsgChat = {
@@ -31,7 +30,7 @@ export class iMessageChannel implements ChannelAdapter {
   maxMessageLength = 100000;
 
   private handler: MessageHandler | null = null;
-  private watchProcess: ChildProcess | null = null;
+  private watchProcess: ReturnType<typeof Bun.spawn> | null = null;
   private readonly imsgPath: string;
   private readonly service: "imessage" | "sms" | "auto";
   private readonly region: string;
@@ -132,7 +131,7 @@ export class iMessageChannel implements ChannelAdapter {
 
     this.readWatchStderr().catch(() => {});
 
-    this.watchProcess.exited.then((code) => {
+    this.watchProcess.exited.then((code: number) => {
       console.error(`[angel] iMessage watch exited with code ${code}`);
     });
 
@@ -140,9 +139,10 @@ export class iMessageChannel implements ChannelAdapter {
   }
 
   private async readWatchStdout() {
-    if (!this.watchProcess?.stdout) return;
+    const stdout = this.watchProcess?.stdout;
+    if (!stdout || typeof stdout === "number") return;
 
-    const reader = this.watchProcess.stdout.getReader();
+    const reader = stdout.getReader();
     const decoder = new TextDecoder();
     let buffer = "";
 
@@ -162,8 +162,9 @@ export class iMessageChannel implements ChannelAdapter {
   }
 
   private async readWatchStderr() {
-    if (!this.watchProcess?.stderr) return;
-    const stderr = await new Response(this.watchProcess.stderr).text();
+    const stderrPipe = this.watchProcess?.stderr;
+    if (!stderrPipe || typeof stderrPipe === "number") return;
+    const stderr = await new Response(stderrPipe).text();
     if (stderr.trim()) {
       console.error(`[angel] iMessage watch stderr: ${stderr.trim()}`);
     }

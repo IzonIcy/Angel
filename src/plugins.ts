@@ -51,11 +51,9 @@ export function loadPlugins(config: AngelConfig): Tool[] {
                 cwd: ctx.workingDir,
               });
 
-              const writer = proc.stdin.getWriter();
-              await writer.write(
-                new TextEncoder().encode(JSON.stringify(input)),
-              );
-              await writer.close();
+              const stdin = proc.stdin as any;
+              stdin.write(JSON.stringify(input));
+              stdin.end();
 
               const stdout = await new Response(proc.stdout).text();
               const exitCode = await proc.exited;

@@ -23,8 +23,7 @@ export class SlackChannel implements ChannelAdapter {
       socketMode: true,
     });
 
-    const auth = await this.app.client.auth.test({ token: this.botToken });
-    this.botUserId = auth.user_id || "";
+    await this.app.client.auth.test({ token: this.botToken });
 
     this.app.event("app_mention", async ({ event }: any) => {
       if (!this.handler) return;

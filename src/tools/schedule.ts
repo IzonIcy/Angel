@@ -28,6 +28,11 @@ export const createTaskTool: Tool = {
         description:
           "ISO datetime for one-shot tasks (e.g., '2025-01-15T14:00:00Z')",
       },
+      fallback_prompt: {
+        type: "string",
+        description:
+          "Optional fallback instruction to execute if the primary prompt fails repeatedly.",
+      },
       timezone: { type: "string", description: "IANA timezone (default: UTC)" },
     },
     required: ["name", "prompt"],
@@ -40,6 +45,7 @@ export const createTaskTool: Tool = {
       prompt: string;
       cron?: string;
       run_at?: string;
+      fallback_prompt?: string;
       timezone?: string;
     },
     ctx: ToolContext,
@@ -70,6 +76,7 @@ export const createTaskTool: Tool = {
       input.cron || null,
       nextRunAt,
       tz,
+      input.fallback_prompt,
     );
     return {
       output: `Task #${id} "${input.name}" scheduled. Next run: ${nextRunAt}`,
@@ -174,6 +181,10 @@ export const updateTaskTool: Tool = {
         type: "string",
         description: "New one-shot datetime (ISO format)",
       },
+      fallback_prompt: {
+        type: "string",
+        description: "Fallback prompt. Set empty string to clear it.",
+      },
       timezone: { type: "string", description: "New IANA timezone" },
     },
     required: ["task_id"],
@@ -187,6 +198,7 @@ export const updateTaskTool: Tool = {
       prompt?: string;
       cron?: string;
       run_at?: string;
+      fallback_prompt?: string;
       timezone?: string;
     },
     ctx: ToolContext,
@@ -205,6 +217,9 @@ export const updateTaskTool: Tool = {
     if (input.name) fields.name = input.name;
     if (input.prompt) fields.prompt = input.prompt;
     if (input.timezone) fields.timezone = input.timezone;
+    if (input.fallback_prompt !== undefined) {
+      fields.fallback_prompt = input.fallback_prompt || null;
+    }
 
     if (input.cron !== undefined) {
       if (input.cron === "") {

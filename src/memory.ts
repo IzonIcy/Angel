@@ -2,8 +2,9 @@ import type { Database } from "bun:sqlite";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
 import { dirname, join } from "path";
 import type { AngelConfig } from "./config";
-import { archiveMemory, getMemories, insertMemory } from "./db";
+import { archiveMemory, getMemories, insertMemory, logUsage } from "./db";
 import { chatComplete, type LlmMessage } from "./llm";
+import { checkBudgetGuardrail, resolveModelForContext } from "./model_router";
 
 export function buildMemoryContext(
   db: Database,
@@ -26,10 +27,16 @@ export function buildMemoryContext(
 
   const memories = getMemories(db, chatId, 20);
   if (memories.length > 0) {
-    const formatted = memories
+    const now = Date.now();
+    const sorted = [...memories].sort((a: any, b: any) => {
+      const scoreA = effectiveMemoryScore(a, config, now);
+      const scoreB = effectiveMemoryScore(b, config, now);
+      return scoreB - scoreA;
+    });
+    const formatted = sorted
       .map(
         (m: any) =>
-          `- [${m.category}] ${m.content} (confidence: ${m.confidence})`,
+          `- [${m.category}] ${m.content} (confidence: ${m.confidence}, effective: ${effectiveMemoryScore(m, config, now).toFixed(3)}${m.pinned ? ", pinned" : ""})`,
       )
       .join("\n");
     parts.push(`[Structured Memories]\n${formatted}`);
@@ -74,8 +81,11 @@ export async function runMemoryReflector(
 ): Promise<void> {
   if (!config.memory.reflector_enabled) return;
   if (recentMessages.length < 3) return;
+  const budgetCheck = checkBudgetGuardrail(db, config, chatId);
+  if (!budgetCheck.allowed) return;
 
   const conversation = recentMessages.slice(-10).join("\n");
+  const model = resolveModelForContext(config, "reflector");
 
   const prompt: LlmMessage[] = [
     {
@@ -89,7 +99,20 @@ Output only valid JSON array, nothing else.`,
   ];
 
   try {
-    const response = await chatComplete(config, prompt, [], { maxTokens: 512 });
+    const start = Date.now();
+    const response = await chatComplete(config, prompt, [], {
+      model,
+      maxTokens: 512,
+    });
+    logUsage(
+      db,
+      chatId,
+      model,
+      response.usage.inputTokens,
+      response.usage.outputTokens,
+      Date.now() - start,
+      "reflector",
+    );
     const facts = JSON.parse(response.text);
     if (!Array.isArray(facts)) return;
 
@@ -126,6 +149,24 @@ Output only valid JSON array, nothing else.`,
   } catch (err: any) {
     console.error(`[angel] Memory reflector error: ${err.message}`);
   }
+}
+
+function effectiveMemoryScore(
+  memory: { confidence: number; pinned?: number; updated_at?: string },
+  config: AngelConfig,
+  nowMs: number,
+): number {
+  if (!config.memory_quality.aging_enabled || memory.pinned) {
+    return memory.confidence || 0.5;
+  }
+  if (!memory.updated_at) return memory.confidence || 0.5;
+  const ageDays = Math.max(
+    0,
+    (nowMs - new Date(memory.updated_at).getTime()) / (1000 * 60 * 60 * 24),
+  );
+  const halfLifeDays = Math.max(1, config.memory_quality.decay_half_life_days);
+  const decay = 0.5 ** (ageDays / halfLifeDays);
+  return (memory.confidence || 0.5) * decay;
 }
 
 export function writeAgentsMd(

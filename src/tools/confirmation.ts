@@ -155,6 +155,7 @@ export const approveConfirmationTool: Tool = {
       db: ctx.db,
       config: ctx.config,
       registry: ctx.registry,
+      skipPolicy: true,
     };
 
     const result = await ctx.registry!.execute(

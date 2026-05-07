@@ -39,6 +39,36 @@ export interface MemoryConfig {
   token_budget: number;
 }
 
+export interface ModelRouteConfig {
+  context: string;
+  model: string;
+}
+
+export interface ModelRoutingConfig {
+  enabled: boolean;
+  routes: ModelRouteConfig[];
+}
+
+export interface DailyBudgetConfig {
+  enabled: boolean;
+  max_total_tokens: number;
+  max_input_tokens: number;
+  max_output_tokens: number;
+  enforce_per_chat: boolean;
+}
+
+export interface MemoryQualityConfig {
+  aging_enabled: boolean;
+  decay_half_life_days: number;
+  contradiction_detection: boolean;
+  source_of_truth_enabled: boolean;
+}
+
+export interface ProactiveConfig {
+  enabled: boolean;
+  inactivity_default_minutes: number;
+}
+
 export interface McpServerConfig {
   command: string;
   args?: string[];
@@ -73,6 +103,10 @@ export interface AngelConfig {
     signal?: SignalConfig;
   };
   memory: MemoryConfig;
+  model_routing: ModelRoutingConfig;
+  daily_budget: DailyBudgetConfig;
+  memory_quality: MemoryQualityConfig;
+  proactive: ProactiveConfig;
   hooks_dir?: string;
   plugins_dir?: string;
   skills_dir?: string;
@@ -102,6 +136,33 @@ export const DEFAULTS: AngelConfig = {
     reflector_interval_ms: 15 * 60 * 1000,
     embedding_enabled: false,
     token_budget: 1500,
+  },
+  model_routing: {
+    enabled: true,
+    routes: [
+      { context: "onboarding", model: "gpt-5.4-mini" },
+      { context: "reflector", model: "gpt-5.4-mini" },
+      { context: "compaction", model: "gpt-5.4-mini" },
+      { context: "scheduler", model: "gpt-5.4" },
+      { context: "default", model: "gpt-5.4" },
+    ],
+  },
+  daily_budget: {
+    enabled: false,
+    max_total_tokens: 500000,
+    max_input_tokens: 350000,
+    max_output_tokens: 150000,
+    enforce_per_chat: false,
+  },
+  memory_quality: {
+    aging_enabled: true,
+    decay_half_life_days: 45,
+    contradiction_detection: true,
+    source_of_truth_enabled: true,
+  },
+  proactive: {
+    enabled: true,
+    inactivity_default_minutes: 720,
   },
   remote: {
     tailscale_host: undefined,

@@ -1,6 +1,8 @@
 import type { Database } from "bun:sqlite";
 import type { AngelConfig } from "../config";
+import { logToolExecution } from "../db";
 import type { LlmTool } from "../llm";
+import { evaluateExecutionPolicy, type PolicyDecision } from "../policy";
 
 export interface ToolContext {
   chatId: number;
@@ -8,8 +10,10 @@ export interface ToolContext {
   workingDir: string;
   db: Database;
   config: AngelConfig;
+  actorId?: string;
   registry?: ToolRegistry;
   sendIntermediate?: (text: string) => Promise<void>;
+  skipPolicy?: boolean;
 }
 
 export interface ToolResult {
@@ -69,10 +73,56 @@ export class ToolRegistry {
     if (!tool) {
       return { output: `Unknown tool: ${name}`, isError: true };
     }
+    const started = Date.now();
+
+    const policyDecision: PolicyDecision = ctx.skipPolicy
+      ? { allowed: true, requireConfirmation: false }
+      : evaluateExecutionPolicy(tool, input, ctx);
+    if (!policyDecision.allowed) {
+      const denial = {
+        output:
+          policyDecision.reason ||
+          (policyDecision.requireConfirmation
+            ? "Action requires confirmation."
+            : "Action blocked by policy."),
+        isError: true,
+      };
+      logToolExecution(ctx.db, {
+        chatId: ctx.chatId,
+        actorId: ctx.actorId,
+        channel: ctx.channel,
+        toolName: name,
+        success: false,
+        durationMs: Date.now() - started,
+        errorText: denial.output,
+      });
+      return denial;
+    }
+
     try {
-      return await tool.execute(input, ctx);
+      const result = await tool.execute(input, ctx);
+      logToolExecution(ctx.db, {
+        chatId: ctx.chatId,
+        actorId: ctx.actorId,
+        channel: ctx.channel,
+        toolName: name,
+        success: !result.isError,
+        durationMs: Date.now() - started,
+        errorText: result.isError ? result.output : undefined,
+      });
+      return result;
     } catch (err: any) {
-      return { output: `Tool error: ${err.message}`, isError: true };
+      const result = { output: `Tool error: ${err.message}`, isError: true };
+      logToolExecution(ctx.db, {
+        chatId: ctx.chatId,
+        actorId: ctx.actorId,
+        channel: ctx.channel,
+        toolName: name,
+        success: false,
+        durationMs: Date.now() - started,
+        errorText: result.output,
+      });
+      return result;
     }
   }
 

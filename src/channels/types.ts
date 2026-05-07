@@ -35,8 +35,16 @@ export interface ChannelAdapter {
   maxMessageLength?: number;
 }
 
+export interface ChannelHealth {
+  name: string;
+  status: "started" | "failed" | "stopped";
+  lastStartedAt?: string;
+  lastError?: string;
+}
+
 export class ChannelRegistry {
   private adapters: Map<string, ChannelAdapter> = new Map();
+  private healthState: Map<string, ChannelHealth> = new Map();
 
   register(adapter: ChannelAdapter) {
     this.adapters.set(adapter.name, adapter);
@@ -50,26 +58,50 @@ export class ChannelRegistry {
     return [...this.adapters.values()];
   }
 
-  async startAll(handler: MessageHandler) {
+  async startAll(handler: MessageHandler): Promise<ChannelHealth[]> {
     const startPromises = this.all().map(async (adapter) => {
       try {
         await adapter.start(handler);
         console.log(`[angel] Channel started: ${adapter.name}`);
+        const health: ChannelHealth = {
+          name: adapter.name,
+          status: "started",
+          lastStartedAt: new Date().toISOString(),
+        };
+        this.healthState.set(adapter.name, health);
+        return health;
       } catch (err: any) {
         console.error(
           `[angel] Failed to start channel ${adapter.name}: ${err.message}`,
         );
+        const health: ChannelHealth = {
+          name: adapter.name,
+          status: "failed",
+          lastError: err.message,
+        };
+        this.healthState.set(adapter.name, health);
+        return health;
       }
     });
-    await Promise.all(startPromises);
+    return Promise.all(startPromises);
   }
 
   async stopAll() {
     for (const adapter of this.all()) {
       try {
         await adapter.stop?.();
+        const previous = this.healthState.get(adapter.name);
+        this.healthState.set(adapter.name, {
+          ...(previous || { name: adapter.name }),
+          name: adapter.name,
+          status: "stopped",
+        });
       } catch {}
     }
+  }
+
+  health(): ChannelHealth[] {
+    return [...this.healthState.values()];
   }
 }
 

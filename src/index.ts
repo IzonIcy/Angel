@@ -32,7 +32,7 @@ import { SignalChannel } from "./channels/signal";
 import { SlackChannel } from "./channels/slack";
 import { ChannelRegistry, splitResponse } from "./channels/types";
 import { handleCommand } from "./commands";
-import { getDb, storeMessage, upsertChat } from "./db";
+import { getDb, logSystemEvent, storeMessage, upsertChat } from "./db";
 import { runDoctor } from "./doctor";
 import { initMcpServers, shutdownMcpServers } from "./mcp";
 import { handleExplicitMemory, scheduleReflector } from "./memory";
@@ -40,6 +40,8 @@ import { loadPlugins } from "./plugins";
 import { startScheduler } from "./scheduler";
 import { runSetup } from "./setup";
 import { discoverSkills } from "./skills";
+import { runSmokeCli } from "./smoke";
+import { advancedTools } from "./tools/advanced";
 import {
   backgroundProcessTools,
   killAllBackgroundProcesses,
@@ -85,6 +87,7 @@ function printHelp() {
     ${color.cyan("start")}       Start the agent ${color.dim("(default)")}
     ${color.cyan("setup")}       Interactive setup wizard
     ${color.cyan("doctor")}      Run diagnostics and health checks
+    ${color.cyan("smoke")}       Run credentialed external integration smoke checks
     ${color.cyan("config")}      Show current configuration
     ${color.cyan("config path")} Show config file path
     ${color.cyan("config edit")} Open config in $EDITOR
@@ -97,6 +100,7 @@ function printHelp() {
     ${color.dim("$")} angel              ${color.dim("# starts the agent")}
     ${color.dim("$")} angel setup        ${color.dim("# run setup wizard")}
     ${color.dim("$")} angel doctor       ${color.dim("# check everything works")}
+    ${color.dim("$")} angel smoke        ${color.dim("# verify configured external integrations")}
 `);
 }
 
@@ -107,6 +111,10 @@ switch (command) {
 
   case "doctor":
     await runDoctor();
+    break;
+
+  case "smoke":
+    await runSmokeCli();
     break;
 
   case "version":
@@ -234,6 +242,7 @@ async function boot() {
   registry.registerMany(fileTools);
   registry.registerMany(webTools);
   registry.registerMany(miscTools);
+  registry.registerMany(advancedTools);
   registry.registerMany(memoryTools);
   registry.registerMany(scheduleTools);
   registry.registerMany(subagentTools);
@@ -488,7 +497,16 @@ async function boot() {
     }
   };
 
-  await channels.startAll(messageHandler);
+  const channelHealth = await channels.startAll(messageHandler);
+  for (const health of channelHealth) {
+    logSystemEvent(
+      db,
+      health.status === "failed" ? "channel_start_failed" : "channel_started",
+      health.status === "failed" ? "error" : "info",
+      health.lastError || health.status,
+      health.name,
+    );
+  }
 
   setCodingAgentNotifier(async (agent, message) => {
     const adapter = channels.get(agent.channel);
@@ -509,6 +527,8 @@ async function boot() {
           config,
           registry,
           isOnboarding: false,
+          senderName: "system",
+          contextTag: "system_summary",
         });
         if (typeof response === "string" && response) {
           const maxLen = adapter.maxMessageLength || 4000;

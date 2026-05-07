@@ -17,6 +17,15 @@ A self-directed assistant that connects to your communication platforms and gets
 - **Coding Agents**: Spawn external agents (Claude Code, Codex, Aider, Goose, Amp) for background work
 - **Subagents**: Spawn isolated child agents for parallel task execution (max depth 2, max concurrent 4)
 - **Confirmations**: Multi-step safe-word verification for dangerous operations via DM
+- **Goal/Project Mode**: Goal tracking with task graphs, dependency-aware next actions, and checkpoints
+- **Policy Engine**: Approval + permission policies scoped by tool/risk/channel/user/path/domain
+- **Model Routing + Budgets**: Context-based model selection with daily token budget guardrails
+- **Memory Quality Layer**: Aging-aware recall, contradiction grouping, and source-of-truth pinning
+- **Knowledge Connectors**: Connector framework with sync + search across external sources
+- **Workflow Recipes**: Reusable multi-step automations that execute tool sequences
+- **Observability Dashboard**: Runtime metrics for usage, tool errors, tasks, and confirmations
+- **Self-Healing Jobs**: Scheduled task fallback prompts after retry exhaustion
+- **Proactive Mode**: Cron/inactivity rules for agent-initiated messages
 - **Message Compaction**: Automatic conversation summarization when context grows large
 - **Onboarding**: Guided new-user flow with profile and preference gathering
 - **MCP Integration**: Dynamically load tools from Model Context Protocol servers
@@ -48,13 +57,17 @@ bun run start
 bun run dev    # file watching (development)
 
 bun run doctor # diagnostics
+
+bun run smoke  # credentialed read-only integration smoke checks
 ```
 
 Channel adapters connect automatically based on your configuration. Talk to Angel through any enabled channel.
 
+`bun run smoke` performs safe, credentialed checks for configured LLM providers, Discord, Slack, iMessage, Signal, and active GitHub/Notion/Google Drive knowledge connectors. Missing optional integrations are reported as skipped; configured integrations fail the smoke run if credentials or read-only connectivity are broken.
+
 ### Chat Commands
 
-`/help` · `/new` · `/model [name]` · `/memory` · `/usage` · `/settings` · `/clear` · `/reset` · `/version`
+`/help` · `/new` · `/model [name]` · `/memory` · `/usage` · `/dashboard` · `/settings` · `/clear` · `/reset` · `/version`
 
 ## Tools
 
@@ -95,6 +108,24 @@ Channel adapters connect automatically based on your configuration. Talk to Ange
 | `list_scheduled_tasks` | Filter by status (active, paused, completed, failed) |
 | `update_task` | Modify task properties |
 | `cancel_task` | Pause or cancel tasks |
+
+### Goals, Policies, Recipes & Ops
+
+| Tool | Description |
+|------|-------------|
+| `create_goal_project` | Create a goal with optional task graph and checkpoint |
+| `list_goals` | List goals with progress |
+| `advance_goal_task` | Advance task status with dependency checks |
+| `goal_next_actions` | Show dependency-ready tasks |
+| `manage_execution_policy` | Create/list/enable/disable/delete approval & permission policies |
+| `set_daily_budget` | Update runtime budget guardrails |
+| `manage_knowledge_connector` | Create/list/sync knowledge connectors |
+| `search_knowledge` | Search synced connector documents |
+| `workflow_recipe` | Create/list/run reusable workflow recipes |
+| `observability_dashboard` | Runtime health and metric snapshot |
+| `proactive_rule` | Manage cron/inactivity proactive rules |
+| `pin_memory` | Mark a memory as source-of-truth |
+| `memory_quality_report` | Analyze memory aging/contradiction state |
 
 ### Coding Agents
 
@@ -242,6 +273,31 @@ memory:
   reflector_enabled: true
   reflector_interval_ms: 900000
 
+model_routing:
+  enabled: true
+  routes:
+    - context: "default"
+      model: "gpt-5.4"
+    - context: "reflector"
+      model: "gpt-5.4-mini"
+
+daily_budget:
+  enabled: false
+  max_total_tokens: 500000
+  max_input_tokens: 350000
+  max_output_tokens: 150000
+  enforce_per_chat: false
+
+memory_quality:
+  aging_enabled: true
+  decay_half_life_days: 45
+  contradiction_detection: true
+  source_of_truth_enabled: true
+
+proactive:
+  enabled: true
+  inactivity_default_minutes: 720
+
 compaction_threshold: 40
 working_dir_isolation: "per_chat"
 data_dir: "~/.angel"
@@ -266,6 +322,8 @@ src/
 ├── config.ts         YAML config loading with env var resolution
 ├── db.ts             SQLite layer (WAL mode, migrations)
 ├── memory.ts         Memory storage, reflection, confidence scoring, file-backed memory
+├── model_router.ts   Context-aware model routing + budget guardrails
+├── policy.ts         Approval/permission policy evaluation
 ├── scheduler.ts      Cron + one-shot task scheduling engine
 ├── subagents.ts      Isolated child agent spawning
 ├── commands.ts       Chat command routing
@@ -274,6 +332,7 @@ src/
 ├── skills.ts         Skill discovery and activation
 ├── mcp.ts            Model Context Protocol server integration
 ├── doctor.ts         Connectivity and accessibility diagnostics
+├── smoke.ts          Credentialed external integration smoke checks
 ├── setup.ts          Interactive setup wizard
 ├── channels/
 │   ├── discord.ts    Discord adapter
@@ -293,6 +352,7 @@ src/
     ├── coding_agents.ts  External coding agent integration
     ├── confirmation.ts   Safe-word confirmation workflow
     ├── send_message.ts   Cross-chat messaging
+    ├── advanced.ts       Goals, policies, connectors, recipes, observability, proactive tools
     └── misc.ts           Utilities (time, todo, export, calculate)
 ```
 

@@ -1,6 +1,6 @@
 import type { Database } from "bun:sqlite";
 import type { AngelConfig } from "./config";
-import { getMemories, getUsageStats } from "./db";
+import { getMemories, getObservabilitySnapshot, getUsageStats } from "./db";
 
 export interface CommandResult {
   text: string;
@@ -25,11 +25,12 @@ export function handleCommand(
       return {
         handled: true,
         text: `Available commands:
-/help — Show this help
+/help — Show help Menu
 /new — Start a new chat session
 /model [name] — Show or change current model
 /memory — Show stored memories
 /usage — Show token usage stats
+/dashboard — Show runtime observability
 /settings — Show current settings
 /clear — Clear session history
 /reset — Redo onboarding
@@ -77,6 +78,23 @@ export function handleCommand(
               `${s.model}: ${s.calls} calls, ${s.total_input} input tokens, ${s.total_output} output tokens`,
           )
           .join("\n"),
+      };
+    }
+
+    case "/dashboard": {
+      const snap = getObservabilitySnapshot(db);
+      return {
+        handled: true,
+        text: `Observability (24h):
+Tokens: ${snap.usage24h.total} (in ${snap.usage24h.input}, out ${snap.usage24h.output})
+Tool calls: ${snap.toolCalls24h} (${snap.toolErrors24h} errors)
+Failed scheduled runs: ${snap.failedTasks24h}
+Pending confirmations: ${snap.pendingConfirmations}
+Active scheduled tasks: ${snap.activeScheduledTasks}
+Live runs: ${snap.liveRuns}
+Queue depth: ${snap.queueDepth}
+Recent failures: ${snap.recentFailures24h}
+Channel health: ${snap.channelHealth.length ? snap.channelHealth.map((c) => `${c.channel}=${c.status} (${c.errors24h} errors)`).join(", ") : "unknown"}`,
       };
     }
 

@@ -4,6 +4,16 @@ import { archiveMemory, getMemories, insertMemory } from "../db";
 import { writeAgentsMd } from "../memory";
 import type { Tool, ToolContext, ToolResult } from "./registry";
 
+function extractContradictionKey(content: string): string | null {
+  const m = content
+    .trim()
+    .match(
+      /^([a-z0-9 _-]{3,80})\s+(is|are|was|were|prefers?|likes?|hates?|uses?)\s+/i,
+    );
+  if (!m) return null;
+  return m[1].trim().toLowerCase();
+}
+
 export const readMemoryTool: Tool = {
   name: "read_memory",
   description:
@@ -115,12 +125,55 @@ export const writeMemoryTool: Tool = {
     }
 
     const chatId = input.scope === "global" ? null : ctx.chatId;
+    const contradictionKey = extractContradictionKey(input.content);
+    if (ctx.config.memory_quality.contradiction_detection && contradictionKey) {
+      const existing = ctx.db
+        .query(
+          `SELECT id, content, pinned, source_of_truth
+           FROM memories
+           WHERE is_archived = 0
+             AND contradiction_key = ?
+             AND (chat_id = ? OR chat_id IS NULL)
+           ORDER BY updated_at DESC`,
+        )
+        .all(contradictionKey, ctx.chatId) as Array<{
+        id: number;
+        content: string;
+        pinned: number;
+        source_of_truth: string | null;
+      }>;
+      const conflict = existing.find(
+        (m) =>
+          m.content.trim().toLowerCase() !== input.content.trim().toLowerCase(),
+      );
+      if (conflict?.pinned || conflict?.source_of_truth) {
+        return {
+          output: `Conflict with pinned/source-of-truth memory #${conflict.id}. Update that memory explicitly first.`,
+          isError: true,
+        };
+      }
+      for (const mem of existing) {
+        if (
+          mem.content.trim().toLowerCase() !==
+          input.content.trim().toLowerCase()
+        ) {
+          archiveMemory(ctx.db, mem.id);
+        }
+      }
+    }
+
     const id = insertMemory(
       ctx.db,
       chatId,
       input.content,
       input.category || "general",
       "agent",
+    );
+    ctx.db.run(
+      `UPDATE memories
+       SET contradiction_key = ?, decay_half_life_days = ?, updated_at = datetime('now')
+       WHERE id = ?`,
+      [contradictionKey, ctx.config.memory_quality.decay_half_life_days, id],
     );
     return { output: `Memory #${id} stored (${input.category || "general"})` };
   },

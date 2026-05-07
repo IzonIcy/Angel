@@ -63,11 +63,9 @@ export async function runHook(
         stderr: "pipe",
       });
 
-      const writer = proc.stdin.getWriter();
-      await writer.write(
-        new TextEncoder().encode(JSON.stringify({ event, data })),
-      );
-      await writer.close();
+      const stdin = proc.stdin as any;
+      stdin.write(JSON.stringify({ event, data }));
+      stdin.end();
 
       const timer = setTimeout(() => proc.kill(), hook.timeout_ms);
       const stdout = await new Response(proc.stdout).text();
