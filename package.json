@@ -45,7 +45,7 @@
     "test": "bun test"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.82.0",
+    "@anthropic-ai/sdk": "^0.95.0",
     "@clack/core": "^1.1.0",
     "@clack/prompts": "^1.1.0",
     "@slack/bolt": "^4.3.0",
