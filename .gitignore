@@ -1,0 +1,10 @@
+node_modules/
+bun.lock
+*.db
+*.db-wal
+*.db-shm
+.env
+dist/
+angel
+angel.config.yaml
+angel.config.yml

@@ -1,0 +1,62 @@
+{
+  "name": "angel",
+  "version": "1.1.0",
+  "type": "module",
+  "description": "AI agent that connects to Discord, Slack, iMessage, and Signal with tool use, memory, and coding agents",
+  "bin": {
+    "angel": "src/index.ts"
+  },
+  "files": [
+    "src",
+    "angel.config.example.yaml",
+    "README.md",
+    "SOUL.md"
+  ],
+  "keywords": [
+    "ai",
+    "agent",
+    "chatbot",
+    "discord",
+    "slack",
+    "imessage",
+    "signal",
+    "bun"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/IzonIcy/Angel"
+  },
+  "engines": {
+    "bun": ">=1.0.0"
+  },
+  "scripts": {
+    "start": "bun run src/index.ts start",
+    "setup": "bun run src/index.ts setup",
+    "doctor": "bun run src/index.ts doctor",
+    "config": "bun run src/index.ts config",
+    "reset": "bun run src/index.ts reset",
+    "dev": "bun --watch run src/index.ts start",
+    "lint": "bunx biome check src",
+    "fix": "bunx biome check --fix src",
+    "format": "bunx biome format --write src",
+    "build": "bun build src/index.ts --compile --outfile angel",
+    "test": "bun test"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.82.0",
+    "@clack/core": "^1.1.0",
+    "@clack/prompts": "^1.1.0",
+    "@slack/bolt": "^4.3.0",
+    "cron-parser": "^5.0.6",
+    "discord.js": "^14.18.0",
+    "openai": "^5.8.0",
+    "picocolors": "^1.1.1",
+    "xxhash-wasm": "^1.1.0",
+    "yaml": "^2.7.1"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.4.10",
+    "@types/bun": "latest"
+  }
+}

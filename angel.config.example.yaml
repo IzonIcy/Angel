@@ -1,0 +1,40 @@
+openai_api_key: "${OPENAI_API_KEY}"
+model: "gpt-5.4"
+max_tokens: 8192
+max_tool_iterations: 50
+timezone: "America/New_York"
+
+channels:
+  # discord:
+  #   enabled: true
+  #   token: "your-discord-bot-token"
+
+  # slack:
+  #   enabled: true
+  #   bot_token: "xoxb-..."
+  #   app_token: "xapp-..."
+
+  # imessage:
+  #   enabled: true
+  #   imsg_path: "imsg"
+  #   service: "auto"   # auto | imessage | sms
+  #   region: "US"
+  #   allowed_handles:   # optional; if set, only these senders are accepted
+  #     - "+14155551212"
+
+  # signal:
+  #   enabled: true
+  #   account: "+1234567890"
+  #   allowed_numbers:  # required - messages denied if empty
+  #     - "+1234567890"
+
+memory:
+  reflector_enabled: true
+  reflector_interval_ms: 900000
+  embedding_enabled: false
+  token_budget: 1500
+
+# mcp_servers:
+#   filesystem:
+#     command: "npx"
+#     args: ["-y", "@modelcontextprotocol/server-filesystem", "."]
