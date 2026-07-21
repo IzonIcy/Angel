@@ -47,7 +47,7 @@ bun install
 bun run setup
 ```
 
-The setup wizard walks through API key configuration, channel setup, and initial preferences. Configuration is stored at `~/.angel/config`.
+The setup wizard will walk through API key configuration, channel setup, and initial preferences. Configuration is stored at `~/.angel/config`.
 
 ## Usage
 

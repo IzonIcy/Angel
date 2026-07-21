@@ -39,6 +39,7 @@
     "reset": "bun run src/index.ts reset",
     "dev": "bun --watch run src/index.ts start",
     "lint": "bunx biome check src",
+    "typecheck": "tsc --noEmit",
     "fix": "bunx biome check --fix src",
     "format": "bunx biome format --write src",
     "build": "bun build src/index.ts --target bun --compile --outfile angel",
