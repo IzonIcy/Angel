@@ -1,0 +1,12 @@
+{
+  "name": "reminder-plugin-example",
+  "version": "0.1.0",
+  "description": "Example plugin manifest showing where custom tools and commands can be declared.",
+  "tools": [],
+  "commands": [
+    {
+      "name": "reminder-help",
+      "description": "Explain how to create reminders with Angel."
+    }
+  ]
+}

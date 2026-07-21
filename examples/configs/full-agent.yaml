@@ -1,0 +1,70 @@
+openai_api_key: "${OPENAI_API_KEY}"
+anthropic_api_key: "${ANTHROPIC_API_KEY}"
+model: "gpt-5.4"
+max_tokens: 8192
+max_tool_iterations: 50
+timezone: "America/New_York"
+working_dir_isolation: "per_chat"
+data_dir: "~/.angel"
+safe_word: "replace-with-your-own-safe-word"
+
+channels:
+  discord:
+    enabled: true
+    token: "${DISCORD_TOKEN}"
+    allowed_users:
+      - "YOUR_DISCORD_USER_ID"
+  slack:
+    enabled: true
+    bot_token: "${SLACK_BOT_TOKEN}"
+    app_token: "${SLACK_APP_TOKEN}"
+    allowed_users:
+      - "U0123456789"
+  signal:
+    enabled: true
+    account: "+15551234567"
+    allowed_numbers:
+      - "+15557654321"
+  imessage:
+    enabled: false
+    service: "auto"
+    region: "US"
+    allowed_handles:
+      - "+15557654321"
+
+memory:
+  reflector_enabled: true
+  reflector_interval_ms: 900000
+  embedding_enabled: false
+  token_budget: 1500
+
+model_routing:
+  enabled: true
+  routes:
+    - context: "onboarding"
+      model: "gpt-5.4-mini"
+    - context: "reflector"
+      model: "gpt-5.4-mini"
+    - context: "compaction"
+      model: "gpt-5.4-mini"
+    - context: "scheduler"
+      model: "gpt-5.4"
+    - context: "default"
+      model: "gpt-5.4"
+
+daily_budget:
+  enabled: false
+  max_total_tokens: 500000
+  max_input_tokens: 350000
+  max_output_tokens: 150000
+  enforce_per_chat: false
+
+memory_quality:
+  aging_enabled: true
+  decay_half_life_days: 45
+  contradiction_detection: true
+  source_of_truth_enabled: true
+
+proactive:
+  enabled: true
+  inactivity_default_minutes: 720

@@ -1,0 +1,16 @@
+openai_api_key: "${OPENAI_API_KEY}"
+model: "gpt-5.4"
+timezone: "America/New_York"
+working_dir_isolation: "per_chat"
+data_dir: "~/.angel"
+
+channels:
+  discord:
+    enabled: true
+    token: "${DISCORD_TOKEN}"
+    allowed_users:
+      - "YOUR_DISCORD_USER_ID"
+
+memory:
+  reflector_enabled: true
+  reflector_interval_ms: 900000

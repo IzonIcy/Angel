@@ -1,0 +1,23 @@
+openai_api_key: "${OPENAI_API_KEY}"
+model: "gpt-5.4-mini"
+max_tool_iterations: 10
+working_dir_isolation: "per_chat"
+data_dir: "~/.angel"
+safe_word: "replace-with-your-own-safe-word"
+
+channels: {}
+
+model_routing:
+  enabled: true
+  routes:
+    - context: "default"
+      model: "gpt-5.4-mini"
+    - context: "reflector"
+      model: "gpt-5.4-mini"
+
+daily_budget:
+  enabled: true
+  max_total_tokens: 100000
+  max_input_tokens: 75000
+  max_output_tokens: 25000
+  enforce_per_chat: true

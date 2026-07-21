@@ -1,0 +1,15 @@
+version: "3.9"
+
+services:
+  angel:
+    build: .
+    volumes:
+      - ./angel.config.yaml:/app/angel.config.yaml:ro
+      - angel_data:/app/data
+    environment:
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+    restart: unless-stopped
+
+volumes:
+  angel_data:

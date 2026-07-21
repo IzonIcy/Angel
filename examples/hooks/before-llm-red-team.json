@@ -1,0 +1,7 @@
+{
+  "name": "before-llm-red-team",
+  "event": "before_llm",
+  "enabled": false,
+  "command": "echo 'Reviewing prompt for sensitive-data risk'",
+  "timeout_ms": 5000
+}

@@ -1,0 +1,22 @@
+{
+  "name": "release-checklist",
+  "description": "Collect active goals, scheduled tasks, and operational health before a release.",
+  "steps": [
+    {
+      "tool": "list_goals",
+      "input": {
+        "status": "active"
+      }
+    },
+    {
+      "tool": "list_scheduled_tasks",
+      "input": {
+        "status": "active"
+      }
+    },
+    {
+      "tool": "observability_dashboard",
+      "input": {}
+    }
+  ]
+}
