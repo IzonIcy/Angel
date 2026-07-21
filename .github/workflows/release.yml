@@ -156,7 +156,7 @@ jobs:
     if: needs.check-version.outputs.should_release == 'true'
     steps:
       - name: Create release with AI notes
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: v${{ needs.check-version.outputs.version }}
           name: v${{ needs.check-version.outputs.version }}
@@ -219,7 +219,7 @@ jobs:
           chmod +x ${{ matrix.asset_name }}
 
       - name: Upload binary to release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: v${{ needs.check-version.outputs.version || github.event.inputs.version }}
           files: ${{ matrix.asset_name }}
