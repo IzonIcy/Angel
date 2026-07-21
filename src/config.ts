@@ -462,7 +462,7 @@ export function validateConfig(config: unknown): AngelConfig {
     throw new Error(`Invalid Angel config:\n- ${errors.join("\n- ")}`);
   }
 
-  return config as AngelConfig;
+  return config as unknown as AngelConfig;
 }
 
 export function saveConfig(config: Partial<AngelConfig>): void {
