@@ -1,3 +1,4 @@
+import { htmlToText } from "./html";
 import type { Tool, ToolResult } from "./registry";
 
 export const browserTool: Tool = {
@@ -29,6 +30,9 @@ export const browserTool: Tool = {
     selector?: string;
     text?: string;
   }): Promise<ToolResult> {
+    // JSON.stringify produces a proper JS string literal, so the URL cannot
+    // break out of the inline script (unlike manual quote-escaping).
+    const urlLiteral = JSON.stringify(input.url);
     try {
       const proc = Bun.spawn(
         [
@@ -40,7 +44,7 @@ export const browserTool: Tool = {
           "chromium",
           `
           const page = await context.newPage();
-          await page.goto('${input.url.replace(/'/g, "\\'")}', { waitUntil: 'networkidle', timeout: 15000 });
+          await page.goto(${urlLiteral}, { waitUntil: 'networkidle', timeout: 15000 });
           const content = await page.evaluate(() => document.body.innerText);
           console.log(content.slice(0, 30000));
         `,
@@ -52,34 +56,26 @@ export const browserTool: Tool = {
       const exitCode = await proc.exited;
 
       if (exitCode !== 0 || !stdout.trim()) {
-        const resp = await fetch(input.url, {
-          headers: { "User-Agent": "Angel/1.0" },
-        });
-        const html = await resp.text();
-        const text = html
-          .replace(/<script[\s\S]*?<\/script>/gi, "")
-          .replace(/<[^>]+>/g, " ")
-          .replace(/\s+/g, " ")
-          .trim();
-        return { output: text.slice(0, 30000) };
+        return fetchFallback(input.url);
       }
 
       return { output: stdout.slice(0, 30000) };
     } catch (err: any) {
       try {
-        const resp = await fetch(input.url, {
-          headers: { "User-Agent": "Angel/1.0" },
-        });
-        const html = await resp.text();
-        const text = html
-          .replace(/<script[\s\S]*?<\/script>/gi, "")
-          .replace(/<[^>]+>/g, " ")
-          .replace(/\s+/g, " ")
-          .trim();
-        return { output: text.slice(0, 30000) };
-      } catch (_e: any) {
+        return fetchFallback(input.url);
+      } catch {
         return { output: `Browser error: ${err.message}`, isError: true };
       }
     }
   },
 };
+
+// If the headless browser isn't available, fall back to a plain fetch and
+// DOM-parse the result (no regex HTML mangling).
+async function fetchFallback(url: string): Promise<ToolResult> {
+  const resp = await fetch(url, {
+    headers: { "User-Agent": "Angel/1.0" },
+  });
+  const html = await resp.text();
+  return { output: htmlToText(html).slice(0, 30000) };
+}

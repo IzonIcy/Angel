@@ -1,3 +1,5 @@
+import { parse } from "node-html-parser";
+import { htmlToText } from "./html";
 import type { Tool, ToolResult } from "./registry";
 
 const PRIVATE_IP_PATTERNS = [
@@ -45,26 +47,25 @@ export const webSearchTool: Tool = {
         signal: AbortSignal.timeout(15_000),
       });
       const html = await resp.text();
-
       const results: string[] = [];
-      const resultRegex =
-        /<a[^>]*class="result__a"[^>]*href="([^"]*)"[^>]*>([\s\S]*?)<\/a>/g;
-      const snippetRegex =
-        /<a[^>]*class="result__snippet"[^>]*>([\s\S]*?)<\/a>/g;
+
+      // Parse once, then query the DOM. Selecting real elements (instead of
+      // regex-hopping through raw HTML) is robust against `>` in quoted
+      // attributes and malformed markup, and `.text` decodes entities.
+      const root = parse(html);
+      const anchors = root.querySelectorAll("a.result__a");
+      const snippetEls = root.querySelectorAll("a.result__snippet");
 
       const max = input.max_results || 5;
       let i = 0;
-      for (
-        let match = resultRegex.exec(html);
-        match !== null && i < max;
-        match = resultRegex.exec(html)
-      ) {
-        const title = match[2].replace(/<[^>]+>/g, "").trim();
-        const href = match[1];
-        const snippetMatch = snippetRegex.exec(html);
-        const snippet = snippetMatch
-          ? snippetMatch[1].replace(/<[^>]+>/g, "").trim()
-          : "";
+      for (const anchor of anchors) {
+        if (i >= max) break;
+        const href = anchor.getAttribute("href") ?? "";
+        // Snippets are siblings of the result link and appear in document
+        // order, so pairing by index mirrors the original intent without
+        // regex. `.text` already decodes HTML entities.
+        const title = anchor.text.trim();
+        const snippet = snippetEls[i] ? snippetEls[i].text.trim() : "";
         results.push(`[${i + 1}] ${title}\n    ${href}\n    ${snippet}`);
         i++;
       }
@@ -126,34 +127,12 @@ export const webFetchTool: Tool = {
       }
 
       const html = await resp.text();
-      const text = stripHtml(html);
+      const text = htmlToText(html);
       return { output: text.slice(0, maxLen) };
     } catch (err: any) {
       return { output: `Fetch error: ${err.message}`, isError: true };
     }
   },
 };
-
-function stripHtml(html: string): string {
-  let text = html
-    .replace(/<script[\s\S]*?<\/script>/gi, "")
-    .replace(/<style[\s\S]*?<\/style>/gi, "")
-    .replace(/<nav[\s\S]*?<\/nav>/gi, "")
-    .replace(/<header[\s\S]*?<\/header>/gi, "")
-    .replace(/<footer[\s\S]*?<\/footer>/gi, "")
-    .replace(/<[^>]+>/g, " ")
-    .replace(/&nbsp;/g, " ")
-    .replace(/&amp;/g, "&")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'");
-
-  text = text
-    .replace(/[ \t]+/g, " ")
-    .replace(/\n{3,}/g, "\n\n")
-    .trim();
-  return text;
-}
 
 export const webTools = [webSearchTool, webFetchTool];
