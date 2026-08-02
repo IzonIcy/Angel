@@ -10,7 +10,7 @@ import {
   storeMessage,
 } from "./db";
 import { runHook } from "./hooks";
-import { chatComplete, type LlmMessage } from "./llm";
+import { chatComplete, type LlmContentPart, type LlmMessage } from "./llm";
 import { buildMemoryContext } from "./memory";
 import { checkBudgetGuardrail, resolveModelForContext } from "./model_router";
 import type { ToolContext, ToolRegistry } from "./tools/registry";
@@ -69,16 +69,16 @@ Be warm and conversational, not like a form. Ask 2-3 questions at a time max. Us
   }
 
   if (image) {
-    messages.push({
-      role: "user",
-      content: [
-        {
-          type: "image_url",
-          image_url: { url: `data:${image.mimeType};base64,${image.base64}` },
+    const content: LlmContentPart[] = [
+      {
+        type: "image_url",
+        image_url: {
+          url: `data:${image.mimeType};base64,${image.base64}`,
         },
-        { type: "text", text: userMessage || "What's in this image?" },
-      ] as any,
-    });
+      },
+      { type: "text", text: userMessage || "What's in this image?" },
+    ];
+    messages.push({ role: "user", content });
   } else {
     messages.push({ role: "user", content: userMessage });
   }
@@ -213,9 +213,9 @@ Be warm and conversational, not like a form. Ask 2-3 questions at a time max. Us
         continue;
       }
 
-      let parsed: any;
+      let parsed: Record<string, unknown>;
       try {
-        parsed = JSON.parse(tc.arguments);
+        parsed = JSON.parse(tc.arguments) as Record<string, unknown>;
       } catch {
         messages.push({
           role: "tool",
@@ -339,11 +339,11 @@ Don't overuse this — quick tasks don't need progress updates. But for multi-st
   parts.push(`Channel: ${channel}`);
   const chatRow = db
     .query("SELECT chat_type FROM chats WHERE id = ?")
-    .get(chatId) as any;
-  if (
+    .get(chatId) as { chat_type: string | null } | undefined;
+  const isGroupChat =
     chatRow?.chat_type?.includes("group") ||
-    chatRow?.chat_type?.includes("guild")
-  ) {
+    chatRow?.chat_type?.includes("guild");
+  if (isGroupChat) {
     parts.push(
       "This is a GROUP chat. Messages are prefixed with [sender name]. Address people by name when relevant. You only receive messages where you were mentioned or addressed.",
     );

@@ -176,9 +176,21 @@ function refreshRoseOAuthToken(
   }
 }
 
+export interface LlmTextContentPart {
+  type: "text";
+  text: string;
+}
+
+export interface LlmImageContentPart {
+  type: "image_url";
+  image_url: { url: string };
+}
+
+export type LlmContentPart = LlmTextContentPart | LlmImageContentPart;
+
 export interface LlmMessage {
   role: "system" | "user" | "assistant" | "tool";
-  content: string;
+  content: string | LlmContentPart[];
   tool_calls?: any[];
   tool_call_id?: string;
   name?: string;
@@ -340,7 +352,11 @@ async function claudeChatComplete(
       anthropicMessages.push({ role: "user", content: msg.content });
     } else if (msg.role === "assistant") {
       const content: any[] = [];
-      if (msg.content) content.push({ type: "text", text: msg.content });
+      if (typeof msg.content === "string") {
+        if (msg.content) content.push({ type: "text", text: msg.content });
+      } else {
+        content.push(...msg.content);
+      }
       if (msg.tool_calls) {
         for (const tc of msg.tool_calls) {
           let parsedInput: any = {};

@@ -104,8 +104,12 @@ Channel health: ${snap.channelHealth.length ? snap.channelHealth.map((c) => `${c
       return { handled: true, text: "New chat started." };
 
     case "/settings": {
-      const enabledChannels = Object.entries(config.channels)
-        .filter(([_, v]: [string, any]) => v?.enabled !== false)
+      const enabledChannels = (
+        Object.entries(config.channels) as Array<
+          [string, { enabled?: boolean } | undefined]
+        >
+      )
+        .filter(([, v]) => v?.enabled !== false)
         .map(([k]) => k);
       return {
         handled: true,

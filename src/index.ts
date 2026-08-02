@@ -1,41 +1,24 @@
 #!/usr/bin/env bun
-import type { Database as BunDatabase } from "bun:sqlite";
 import * as p from "@clack/prompts";
 import color from "picocolors";
+import pkg from "../package.json";
+
+import { DiscordChannel } from "./channels/discord";
+import { iMessageChannel } from "./channels/imessage";
+import { SignalChannel } from "./channels/signal";
+import { SlackChannel } from "./channels/slack";
+import { ChannelRegistry } from "./channels/types";
 import {
   type ChannelConfig,
   configExists,
   configPath,
   loadConfig,
 } from "./config";
-
-function getAllowedUsers(
-  db: BunDatabase,
-  channel: string,
-  configList?: string[],
-): Set<string> | null {
-  const dbRows = db
-    .query("SELECT user_id FROM allowed_users WHERE channel = ?")
-    .all(channel) as { user_id: string }[];
-
-  const combined = new Set<string>();
-  if (configList) for (const u of configList) combined.add(u);
-  for (const row of dbRows) combined.add(row.user_id);
-
-  return combined.size > 0 ? combined : null;
-}
-
-import { INTERRUPTED, processMessage } from "./agent";
-import { DiscordChannel } from "./channels/discord";
-import { iMessageChannel } from "./channels/imessage";
-import { SignalChannel } from "./channels/signal";
-import { SlackChannel } from "./channels/slack";
-import { ChannelRegistry, splitResponse } from "./channels/types";
-import { handleCommand } from "./commands";
-import { getDb, logSystemEvent, storeMessage, upsertChat } from "./db";
+import { getDb, logSystemEvent } from "./db";
 import { runDoctor } from "./doctor";
 import { initMcpServers, shutdownMcpServers } from "./mcp";
-import { handleExplicitMemory, scheduleReflector } from "./memory";
+import { createMessageHandler } from "./message_handler";
+import { setupNotifiers } from "./notifiers";
 import { loadPlugins } from "./plugins";
 import { startScheduler } from "./scheduler";
 import { runSetup } from "./setup";
@@ -48,32 +31,30 @@ import {
   persistBackgroundProcesses,
   restoreBackgroundProcesses,
   setBackgroundProcessDataDir,
-  setBackgroundProcessNotifier,
 } from "./tools/background_processes";
 import { bashTool } from "./tools/bash";
 import { browserTool } from "./tools/browser";
 import {
   codingAgentTools,
   killAllCodingAgents,
+  listCodingAgentsTool,
   persistRunningAgents,
   restoreRunningAgents,
   setCodingAgentDataDir,
-  setCodingAgentNotifier,
-  setCodingAgentProgressNotifier,
 } from "./tools/coding_agents";
 import { confirmationTools } from "./tools/confirmation";
 import { emitMessageTool } from "./tools/emit_message";
 import { fileTools } from "./tools/files";
 import { memoryTools } from "./tools/memory";
 import { miscTools } from "./tools/misc";
-import { ToolRegistry } from "./tools/registry";
+import { type ToolContext, ToolRegistry } from "./tools/registry";
 import { remoteTools } from "./tools/remote";
 import { scheduleTools } from "./tools/schedule";
 import { sendMessageTool, setSendMessageDeps } from "./tools/send_message";
 import { subagentTools } from "./tools/subagent";
 import { webTools } from "./tools/web";
 
-const { version: VERSION } = require("../package.json");
+const VERSION: string = pkg.version;
 const args = process.argv.slice(2);
 const command = args[0] || "start";
 
@@ -145,8 +126,12 @@ switch (command) {
         break;
       }
       const config = loadConfig();
-      const enabledChannels = Object.entries(config.channels)
-        .filter(([_, v]: [string, any]) => v?.enabled !== false)
+      const enabledChannels = (
+        Object.entries(config.channels) as Array<
+          [string, ChannelConfig | undefined]
+        >
+      )
+        .filter(([, v]) => v?.enabled !== false)
         .map(([k]) => k);
       p.intro(color.bgCyan(color.black(" angel config ")));
       p.log.info(`Model:      ${color.cyan(config.model)}`);
@@ -186,9 +171,18 @@ switch (command) {
   }
 
   case "agents": {
-    const { listCodingAgentsTool } = await import("./tools/coding_agents");
+    const config = loadConfig();
+    const db = getDb(config.data_dir);
+    const ctx: ToolContext = {
+      chatId: 0,
+      channel: "cli",
+      workingDir: process.cwd(),
+      db,
+      config,
+      skipPolicy: true,
+    };
     p.intro(color.bgCyan(color.black(" angel agents ")));
-    const result = await listCodingAgentsTool.execute({}, {} as any);
+    const result = await listCodingAgentsTool.execute({}, ctx);
     for (const line of result.output.split("\n")) {
       const installed = line.includes("installed (");
       if (installed) {
@@ -232,10 +226,8 @@ async function boot() {
   const registry = new ToolRegistry();
   const channels = new ChannelRegistry();
 
-  // Set up coding agent persistence directory
+  // Set up coding agent + background process persistence directories
   setCodingAgentDataDir(config.data_dir);
-
-  // Set up background process persistence directory
   setBackgroundProcessDataDir(config.data_dir);
 
   registry.register(bashTool);
@@ -305,197 +297,13 @@ async function boot() {
     );
   }
 
-  const activeChats: Map<number, AbortController> = new Map();
-
-  const messageHandler = async (msg: any) => {
-    const channelKey = msg.chatType.split("_")[0];
-    const channelConfig = (config.channels as any)[channelKey] as
-      | ChannelConfig
-      | undefined;
-    const allowedUsers = getAllowedUsers(
-      db,
-      channelKey,
-      channelConfig?.allowed_users,
-    );
-    if (allowedUsers && !allowedUsers.has(msg.senderName)) {
-      return;
-    }
-
-    const chatId = upsertChat(
-      db,
-      channelKey,
-      msg.externalChatId,
-      msg.chatType,
-      msg.senderName,
-    );
-
-    // Handle reactions: log them and store in message history for context,
-    // but don't trigger a full LLM response (reactions are informational)
-    if (msg.isReaction) {
-      console.log(`[angel] Received reaction in chat ${chatId}: ${msg.text}`);
-      // Store reaction as a user message for context in future turns
-      storeMessage(db, chatId, "user", msg.text, {
-        senderName: msg.senderName,
-      });
-      // Don't process further - reactions don't need a response
-      return;
-    }
-
-    const existing = activeChats.get(chatId);
-    if (existing) {
-      existing.abort();
-      await new Promise((r) => setTimeout(r, 50));
-    }
-
-    const controller = new AbortController();
-    activeChats.set(chatId, controller);
-
-    const memoryResult = handleExplicitMemory(msg.text, db, chatId);
-    if (memoryResult) {
-      const adapter = channels.get(msg.chatType.split("_")[0]);
-      if (adapter) await adapter.sendText(msg.externalChatId, memoryResult);
-      return;
-    }
-
-    const cmdResult = handleCommand(msg.text, chatId, db, config);
-    if (cmdResult.handled) {
-      const adapter = channels.get(msg.chatType.split("_")[0]);
-      if (adapter) await adapter.sendText(msg.externalChatId, cmdResult.text);
-      if (cmdResult.action === "restart") {
-        const persistedAgents = persistRunningAgents();
-        const persistedProcesses = persistBackgroundProcesses();
-        console.log(
-          `[angel] Restart requested. Preserving ${persistedAgents} coding agent(s) and ${persistedProcesses} background process(es)...`,
-        );
-        await channels.stopAll();
-        await shutdownMcpServers();
-        process.exit(0);
-      }
-      return;
-    }
-
-    const onboarded = db
-      .query("SELECT value FROM db_meta WHERE key = 'onboarded'")
-      .get() as { value: string } | null;
-    if (!onboarded) {
-      const msgCount = db
-        .query("SELECT COUNT(*) as count FROM messages WHERE chat_id = ?")
-        .get(chatId) as { count: number };
-      if (msgCount.count === 0) {
-        db.run(
-          "INSERT OR REPLACE INTO db_meta (key, value) VALUES ('onboarding_chat', ?)",
-          [String(chatId)],
-        );
-      }
-      const onboardingChat = db
-        .query("SELECT value FROM db_meta WHERE key = 'onboarding_chat'")
-        .get() as { value: string } | null;
-      if (onboardingChat && parseInt(onboardingChat.value, 10) === chatId) {
-        const memories = db
-          .query(
-            "SELECT COUNT(*) as count FROM memories WHERE category = 'profile'",
-          )
-          .get() as { count: number };
-        if (memories.count >= 3) {
-          db.run(
-            "INSERT OR REPLACE INTO db_meta (key, value) VALUES ('onboarded', '1')",
-          );
-        }
-      }
-    }
-
-    const channelName = msg.chatType.split("_")[0];
-    const adapter = channels.get(channelName);
-
-    let typingInterval: ReturnType<typeof setInterval> | null = null;
-    if (adapter?.sendTyping) {
-      adapter.sendTyping(msg.externalChatId);
-      typingInterval = setInterval(
-        () => adapter.sendTyping!(msg.externalChatId),
-        4000,
-      );
-    }
-
-    try {
-      const image = msg.imageBase64
-        ? {
-            base64: msg.imageBase64,
-            mimeType: msg.imageMimeType || "image/jpeg",
-          }
-        : undefined;
-      const onboardedCheck = db
-        .query("SELECT value FROM db_meta WHERE key = 'onboarded'")
-        .get() as { value: string } | null;
-      const onboardingChatCheck = db
-        .query("SELECT value FROM db_meta WHERE key = 'onboarding_chat'")
-        .get() as { value: string } | null;
-      const isOnboarding =
-        !onboardedCheck &&
-        onboardingChatCheck &&
-        parseInt(onboardingChatCheck.value, 10) === chatId;
-      const userText = msg.isGroupMention
-        ? `[${msg.senderName}]: ${msg.text}`
-        : msg.text;
-      const sendIntermediate = async (text: string) => {
-        if (adapter) {
-          const maxLen = adapter.maxMessageLength || 4000;
-          const chunks = splitResponse(text, maxLen);
-          for (const chunk of chunks) {
-            await adapter.sendText(msg.externalChatId, chunk);
-          }
-        }
-      };
-
-      const response = await processMessage(
-        userText,
-        {
-          chatId,
-          channel: channelName,
-          db,
-          config,
-          registry,
-          isOnboarding: !!isOnboarding,
-          signal: controller.signal,
-          senderName: msg.senderName,
-          senderDmId: msg.isGroupMention
-            ? msg.senderDmId || msg.senderName
-            : undefined,
-          sendIntermediate,
-        },
-        image,
-      );
-
-      if (typingInterval) clearInterval(typingInterval);
-
-      if (response === INTERRUPTED) {
-        console.log(`[angel] Chat ${chatId} interrupted by new message`);
-        return;
-      }
-
-      if (adapter && response) {
-        const maxLen = adapter.maxMessageLength || 4000;
-        const chunks = splitResponse(response, maxLen);
-        for (const chunk of chunks) {
-          await adapter.sendText(msg.externalChatId, chunk);
-        }
-      }
-
-      const recentMsgs = [msg.text, response].filter(Boolean);
-      scheduleReflector(db, chatId, config, recentMsgs);
-    } catch (err: any) {
-      if (typingInterval) clearInterval(typingInterval);
-      if (controller.signal.aborted) return;
-      console.error(`[angel] Error processing message: ${err.message}`);
-      if (adapter) {
-        await adapter.sendText(
-          msg.externalChatId,
-          "Sorry, I encountered an error processing your message.",
-        );
-      }
-    } finally {
-      if (activeChats.get(chatId) === controller) activeChats.delete(chatId);
-    }
-  };
+  const messageHandler = createMessageHandler({
+    db,
+    config,
+    registry,
+    channels,
+    onRestart: () => void doRestart(channels),
+  });
 
   const channelHealth = await channels.startAll(messageHandler);
   for (const health of channelHealth) {
@@ -508,60 +316,7 @@ async function boot() {
     );
   }
 
-  setCodingAgentNotifier(async (agent, message) => {
-    const adapter = channels.get(agent.channel);
-    if (adapter && agent.externalChatId) {
-      const chatId = upsertChat(
-        db,
-        agent.channel,
-        agent.externalChatId,
-        agent.channel,
-        "system",
-      );
-      const syntheticInput = `[System: coding agent "${agent.agent}" just finished a task. Here is the raw output — summarize it for me in your own words and let me know what happened.]\n\nOriginal task: ${agent.prompt}\n\n${message}`;
-      try {
-        const response = await processMessage(syntheticInput, {
-          chatId,
-          channel: agent.channel,
-          db,
-          config,
-          registry,
-          isOnboarding: false,
-          senderName: "system",
-          contextTag: "system_summary",
-        });
-        if (typeof response === "string" && response) {
-          const maxLen = adapter.maxMessageLength || 4000;
-          const chunks = splitResponse(response, maxLen);
-          for (const chunk of chunks) {
-            await adapter.sendText(agent.externalChatId, chunk);
-          }
-        }
-      } catch (err: any) {
-        console.error(`[angel] Error processing agent result: ${err.message}`);
-        const maxLen = adapter.maxMessageLength || 4000;
-        const chunks = splitResponse(message, maxLen);
-        for (const chunk of chunks) {
-          await adapter.sendText(agent.externalChatId, chunk);
-        }
-      }
-    }
-  });
-
-  // Optional: Send progress updates for long-running coding agents
-  setCodingAgentProgressNotifier(async (agent, progressMessage) => {
-    const adapter = channels.get(agent.channel);
-    if (adapter && agent.externalChatId) {
-      try {
-        await adapter.sendText(
-          agent.externalChatId,
-          `[${agent.agent} #${agent.id}] ${progressMessage}`,
-        );
-      } catch (err: any) {
-        console.error(`[angel] Error sending progress: ${err.message}`);
-      }
-    }
-  });
+  setupNotifiers({ db, config, registry, channels });
 
   // Restore any coding agents that were running before restart
   const restoredAgents = restoreRunningAgents();
@@ -570,22 +325,6 @@ async function boot() {
       `Restored ${color.cyan(String(restoredAgents))} coding agent(s) from previous session`,
     );
   }
-
-  // Set up background process notifier
-  setBackgroundProcessNotifier(async (proc, message) => {
-    const adapter = channels.get(proc.channel);
-    if (adapter && proc.externalChatId) {
-      try {
-        const maxLen = adapter.maxMessageLength || 4000;
-        const chunks = splitResponse(message, maxLen);
-        for (const chunk of chunks) {
-          await adapter.sendText(proc.externalChatId, chunk);
-        }
-      } catch (err: any) {
-        console.error(`[angel] Error notifying process exit: ${err.message}`);
-      }
-    }
-  });
 
   // Restore any background processes that were running before restart
   const restoredProcesses = restoreBackgroundProcesses();
@@ -615,10 +354,22 @@ async function boot() {
       killAllBackgroundProcesses();
       await channels.stopAll();
       await shutdownMcpServers();
-    } catch (err: any) {
-      console.error(`[angel] Shutdown error: ${err.message}`);
+    } catch (err) {
+      const detail = err instanceof Error ? err.message : String(err);
+      console.error(`[angel] Shutdown error: ${detail}`);
     }
     clearTimeout(forceExit);
     process.exit(0);
   });
+}
+
+async function doRestart(channels: ChannelRegistry): Promise<void> {
+  const persistedAgents = persistRunningAgents();
+  const persistedProcesses = persistBackgroundProcesses();
+  console.log(
+    `[angel] Restart requested. Preserving ${persistedAgents} coding agent(s) and ${persistedProcesses} background process(es)...`,
+  );
+  await channels.stopAll();
+  await shutdownMcpServers();
+  process.exit(0);
 }

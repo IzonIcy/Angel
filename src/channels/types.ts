@@ -179,3 +179,20 @@ export function splitResponse(text: string, maxLen: number): string[] {
 
   return chunks;
 }
+
+/**
+ * Send `text` to a channel adapter, splitting it into multiple messages when
+ * it exceeds the adapter's max length (or the `---MSG---` separator is used).
+ * No-op if there's no adapter or no text.
+ */
+export async function sendChunked(
+  adapter: ChannelAdapter | undefined,
+  externalChatId: string,
+  text: string,
+): Promise<void> {
+  if (!adapter || !text) return;
+  const maxLen = adapter.maxMessageLength || 4000;
+  for (const chunk of splitResponse(text, maxLen)) {
+    await adapter.sendText(externalChatId, chunk);
+  }
+}
