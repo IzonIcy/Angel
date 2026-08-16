@@ -24,7 +24,9 @@ const AGENTS: Record<string, AgentDef> = {
         "stream-json",
         "--max-turns",
         "50",
-        "--dangerously-skip-permissions",
+        // No --dangerously-skip-permissions here: spawned agents run under
+        // their own permission model and cannot silently execute arbitrary
+        // shell. Tools they can't approve are skipped, not bypassed.
       ];
       if (opts.model) args.push("--model", opts.model);
       args.push(prompt);
@@ -44,7 +46,7 @@ const AGENTS: Record<string, AgentDef> = {
         "stream-json",
         "--max-turns",
         "50",
-        "--dangerously-skip-permissions",
+        // No --dangerously-skip-permissions — same rationale as claude.
       ];
       if (opts.model) args.push("--model", opts.model);
       args.push(prompt);
@@ -57,7 +59,9 @@ const AGENTS: Record<string, AgentDef> = {
   codex: {
     command: "codex",
     buildArgs: (prompt, opts) => {
-      const args = ["--approval-mode", "full-auto", "-q"];
+      // on-failure prompts before destructive commands instead of running
+      // everything full-auto.
+      const args = ["--approval-mode", "on-failure", "-q"];
       if (opts.model) args.push("--model", opts.model);
       args.push(prompt);
       return args;
@@ -180,7 +184,7 @@ async function notifyProgress(agent: RunningAgent, message: string) {
 
 export const spawnCodingAgentTool: Tool = {
   name: "spawn_coding_agent",
-  description: `Spawn an external coding agent (claude, rose, codex, aider, goose, amp) to work on a task in the background. The user is automatically notified when it finishes.`,
+  description: `Spawn an external coding agent (claude, rose, codex, aider, goose, amp) to work on a task in the background. The user is automatically notified when it finishes. This is a high-risk tool: the spawned agent works on real files in its working directory. It runs under the coding agent's own permission model — no permission bypasses are used — so commands the agent cannot approve are skipped, not silently executed. For anything destructive, obtain safe-word confirmation from the user first.`,
   parameters: {
     type: "object",
     properties: {

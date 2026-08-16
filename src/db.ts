@@ -525,6 +525,19 @@ export function getScheduledTasksDue(db: Database): any[] {
     .all();
 }
 
+/**
+ * Atomically claim a due task so overlapping scheduler ticks can't run it
+ * twice. Returns true only if THIS call won the claim.
+ */
+export function claimScheduledTask(db: Database, taskId: number): boolean {
+  const result = db
+    .query(
+      `UPDATE scheduled_tasks SET status = 'running' WHERE id = ? AND status = 'active'`,
+    )
+    .run(taskId);
+  return result.changes > 0;
+}
+
 function toSqliteDatetime(iso: string): string {
   return iso
     .replace("T", " ")
@@ -563,10 +576,12 @@ export function updateTaskNextRun(
   taskId: number,
   nextRunAt: string,
 ) {
-  db.run("UPDATE scheduled_tasks SET next_run_at = ? WHERE id = ?", [
-    toSqliteDatetime(nextRunAt),
-    taskId,
-  ]);
+  // Resets status to 'active' too: tasks are claimed as 'running' while they
+  // execute, and rescheduling always means "eligible to run again".
+  db.run(
+    "UPDATE scheduled_tasks SET next_run_at = ?, status = 'active' WHERE id = ?",
+    [toSqliteDatetime(nextRunAt), taskId],
+  );
 }
 
 export function updateTaskStatus(db: Database, taskId: number, status: string) {

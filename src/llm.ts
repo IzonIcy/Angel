@@ -239,13 +239,18 @@ function isRetryable(err: any): boolean {
   );
 }
 
-async function withRetry<T>(fn: () => Promise<T>): Promise<T> {
+async function withRetry<T>(
+  fn: () => Promise<T>,
+  signal?: AbortSignal,
+): Promise<T> {
   let lastErr: any;
   for (let attempt = 0; attempt < MAX_LLM_RETRIES; attempt++) {
+    if (signal?.aborted) throw new DOMException("Aborted", "AbortError");
     try {
       return await fn();
     } catch (err: any) {
       lastErr = err;
+      if (signal?.aborted) throw err;
       if (attempt < MAX_LLM_RETRIES - 1 && isRetryable(err)) {
         const delay = RETRY_BASE_DELAY_MS * 2 ** attempt;
         console.error(
@@ -268,13 +273,16 @@ export async function chatComplete(
     model?: string;
     maxTokens?: number;
     onTextDelta?: (delta: string) => void;
+    signal?: AbortSignal;
   },
 ): Promise<LlmResponse> {
   const model = opts?.model || config.model;
+  const signal = opts?.signal;
 
   if (isClaudeModel(model)) {
-    return withRetry(() =>
-      claudeChatComplete(config, model, messages, tools, opts),
+    return withRetry(
+      () => claudeChatComplete(config, model, messages, tools, opts),
+      signal,
     );
   }
 
@@ -282,25 +290,31 @@ export async function chatComplete(
   const maxTokens = opts?.maxTokens || config.max_tokens;
 
   if (opts?.onTextDelta) {
-    return withRetry(() =>
-      streamChatComplete(
-        client,
-        model,
-        messages,
-        tools,
-        maxTokens,
-        opts.onTextDelta!,
-      ),
+    return withRetry(
+      () =>
+        streamChatComplete(
+          client,
+          model,
+          messages,
+          tools,
+          maxTokens,
+          opts.onTextDelta!,
+          signal,
+        ),
+      signal,
     );
   }
 
   return withRetry(async () => {
-    const response = await client.chat.completions.create({
-      model,
-      messages: messages as any,
-      tools: tools.length > 0 ? (tools as any) : undefined,
-      max_completion_tokens: maxTokens,
-    } as any);
+    const response = await client.chat.completions.create(
+      {
+        model,
+        messages: messages as any,
+        tools: tools.length > 0 ? (tools as any) : undefined,
+        max_completion_tokens: maxTokens,
+      } as any,
+      { signal },
+    );
 
     const choice = response.choices[0];
 
@@ -336,6 +350,7 @@ async function claudeChatComplete(
   opts?: {
     maxTokens?: number;
     onTextDelta?: (delta: string) => void;
+    signal?: AbortSignal;
   },
 ): Promise<LlmResponse> {
   const client = getAnthropicClient(config);
@@ -426,10 +441,12 @@ async function claudeChatComplete(
   if (anthropicTools.length > 0) params.tools = anthropicTools;
 
   if (opts?.onTextDelta) {
-    return streamClaudeChat(client, params, opts.onTextDelta);
+    return streamClaudeChat(client, params, opts.onTextDelta, opts.signal);
   }
 
-  const response = await client.beta.messages.create(params);
+  const response = await client.beta.messages.create(params, {
+    signal: opts?.signal,
+  });
 
   let text = "";
   const toolCalls: Array<{ id: string; name: string; arguments: string }> = [];
@@ -464,8 +481,9 @@ async function streamClaudeChat(
   client: Anthropic,
   params: any,
   onTextDelta: (delta: string) => void,
+  signal?: AbortSignal,
 ): Promise<LlmResponse> {
-  const stream = client.beta.messages.stream(params);
+  const stream = client.beta.messages.stream(params, { signal });
 
   let text = "";
   const toolCalls: Map<
@@ -540,15 +558,19 @@ async function streamChatComplete(
   tools: LlmTool[],
   maxTokens: number,
   onTextDelta: (delta: string) => void,
+  signal?: AbortSignal,
 ): Promise<LlmResponse> {
-  const stream = await client.chat.completions.create({
-    model,
-    messages: messages as any,
-    tools: tools.length > 0 ? (tools as any) : undefined,
-    max_completion_tokens: maxTokens,
-    stream: true,
-    stream_options: { include_usage: true },
-  });
+  const stream = await client.chat.completions.create(
+    {
+      model,
+      messages: messages as any,
+      tools: tools.length > 0 ? (tools as any) : undefined,
+      max_completion_tokens: maxTokens,
+      stream: true,
+      stream_options: { include_usage: true },
+    },
+    { signal },
+  );
 
   let text = "";
   const toolCalls: Map<
@@ -559,6 +581,7 @@ async function streamChatComplete(
   let usage = { inputTokens: 0, outputTokens: 0 };
 
   for await (const chunk of stream) {
+    if (signal?.aborted) throw new DOMException("Aborted", "AbortError");
     const delta = chunk.choices?.[0]?.delta;
     if (!delta) {
       if (chunk.usage) {

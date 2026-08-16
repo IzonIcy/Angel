@@ -157,11 +157,10 @@ export function createMessageHandler(deps: MessageHandlerDeps): MessageHandler {
 
     let typingInterval: ReturnType<typeof setInterval> | null = null;
     if (adapter?.sendTyping) {
-      adapter.sendTyping(msg.externalChatId);
-      typingInterval = setInterval(
-        () => adapter.sendTyping!(msg.externalChatId),
-        4000,
-      );
+      void adapter.sendTyping(msg.externalChatId).catch(() => {});
+      typingInterval = setInterval(() => {
+        void adapter.sendTyping!(msg.externalChatId).catch(() => {});
+      }, 4000);
     }
 
     try {
@@ -202,6 +201,13 @@ export function createMessageHandler(deps: MessageHandlerDeps): MessageHandler {
 
       if (response === INTERRUPTED) {
         console.log(`[angel] Chat ${chatId} interrupted by new message`);
+        return;
+      }
+
+      // A newer message may have aborted this run while we were mid-flight.
+      // Never send a stale response after the turn that replaced us.
+      if (controller.signal.aborted) {
+        console.log(`[angel] Chat ${chatId} run aborted, dropping response`);
         return;
       }
 

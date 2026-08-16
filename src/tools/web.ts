@@ -1,23 +1,7 @@
 import { parse } from "node-html-parser";
 import { htmlToText } from "./html";
 import type { Tool, ToolResult } from "./registry";
-
-const PRIVATE_IP_PATTERNS = [
-  /^https?:\/\/localhost[:/]/i,
-  /^https?:\/\/127\.\d+\.\d+\.\d+/i,
-  /^https?:\/\/0\.0\.0\.0/i,
-  /^https?:\/\/\[::1\]/i,
-  /^https?:\/\/10\.\d+\.\d+\.\d+/i,
-  /^https?:\/\/172\.(1[6-9]|2\d|3[01])\.\d+\.\d+/i,
-  /^https?:\/\/192\.168\.\d+\.\d+/i,
-  /^https?:\/\/169\.254\.\d+\.\d+/i,
-  /^https?:\/\/\[?fe80:/i,
-  /^https?:\/\/\[?fd[0-9a-f]{2}:/i,
-];
-
-function isPrivateUrl(url: string): boolean {
-  return PRIVATE_IP_PATTERNS.some((p) => p.test(url));
-}
+import { fetchSafe } from "./ssrf";
 
 export const webSearchTool: Tool = {
   name: "web_search",
@@ -101,15 +85,8 @@ export const webFetchTool: Tool = {
   }): Promise<ToolResult> {
     const maxLen = input.max_length || 20000;
     try {
-      if (isPrivateUrl(input.url)) {
-        return {
-          output: "Access denied: private/internal addresses are blocked",
-          isError: true,
-        };
-      }
-      const resp = await fetch(input.url, {
+      const resp = await fetchSafe(input.url, {
         headers: { "User-Agent": "Angel/1.0" },
-        redirect: "follow",
         signal: AbortSignal.timeout(30_000),
       });
 

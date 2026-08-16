@@ -5,6 +5,7 @@ import type { ChannelRegistry } from "./channels/types";
 import { splitMessage } from "./channels/types";
 import type { AngelConfig } from "./config";
 import {
+  claimScheduledTask,
   getScheduledTasksDue,
   insertTaskDlq,
   logSystemEvent,
@@ -40,6 +41,11 @@ async function tick(
 ) {
   const dueTasks = getScheduledTasksDue(db);
   for (const task of dueTasks) {
+    // Atomically claim the task. An overlapping tick that sees the same row
+    // still as 'active' loses the claim and skips it — no more double runs of
+    // tasks that take longer than the 15s tick.
+    if (!claimScheduledTask(db, task.id)) continue;
+
     try {
       const chatRow = db
         .query("SELECT * FROM chats WHERE id = ?")
@@ -268,17 +274,20 @@ async function tickProactiveRules(
         if (!isDue(rule.next_run_at)) {
           continue;
         }
+        const next = getNextCronRun(rule.cron_expr, config.timezone);
+        // Optimistic claim: only the tick that wins the conditional update
+        // sends the message, so overlapping ticks can't double-send.
+        const claimed = db.run(
+          "UPDATE proactive_rules SET next_run_at = ?, last_triggered_at = datetime('now') WHERE id = ? AND status = 'active' AND next_run_at = ?",
+          [toSqliteDatetime(next), rule.id, rule.next_run_at],
+        );
+        if (claimed.changes === 0) continue;
         const chunks = splitMessage(
           String(rule.message_template || "").trim(),
           adapter.maxMessageLength || 4000,
         );
         for (const chunk of chunks)
           await adapter.sendText(chat.external_chat_id, chunk);
-        const next = getNextCronRun(rule.cron_expr, config.timezone);
-        db.run(
-          "UPDATE proactive_rules SET next_run_at = ?, last_triggered_at = datetime('now') WHERE id = ?",
-          [toSqliteDatetime(next), rule.id],
-        );
         continue;
       }
 
@@ -307,6 +316,14 @@ async function tickProactiveRules(
           continue;
         }
 
+        // Optimistic claim against the last_triggered_at we just read —
+        // prevents two overlapping ticks from both sending.
+        const claimed = db.run(
+          "UPDATE proactive_rules SET last_triggered_at = datetime('now') WHERE id = ? AND status = 'active' AND last_triggered_at IS ?",
+          [rule.id, rule.last_triggered_at],
+        );
+        if (claimed.changes === 0) continue;
+
         const rendered = String(rule.message_template || "").replace(
           /\{\{last_seen_minutes\}\}/g,
           String(Math.floor(minutesSince)),
@@ -314,10 +331,6 @@ async function tickProactiveRules(
         const chunks = splitMessage(rendered, adapter.maxMessageLength || 4000);
         for (const chunk of chunks)
           await adapter.sendText(chat.external_chat_id, chunk);
-        db.run(
-          "UPDATE proactive_rules SET last_triggered_at = datetime('now') WHERE id = ?",
-          [rule.id],
-        );
       }
     } catch (err: any) {
       logSystemEvent(

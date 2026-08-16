@@ -4,10 +4,11 @@ import {
   mkdirSync,
   readdirSync,
   readFileSync,
+  realpathSync,
   statSync,
   writeFileSync,
 } from "fs";
-import { dirname, join, relative } from "path";
+import { basename, dirname, join, relative, sep } from "path";
 import type { Tool, ToolContext, ToolResult } from "./registry";
 
 const BLOCKED_PATHS = [
@@ -25,9 +26,51 @@ function isPathBlocked(filePath: string): boolean {
   return BLOCKED_PATHS.some((p) => normalized.includes(p));
 }
 
-function resolvePath(ctx: ToolContext, filePath: string): string {
-  if (filePath.startsWith("/")) return filePath;
-  return join(ctx.workingDir, filePath);
+/**
+ * Resolve a path to its real location, following symlinks, so a link inside
+ * the working dir can't point outside it. For paths that don't exist yet
+ * (writes), resolves the deepest existing ancestor and appends the remainder.
+ */
+function resolveRealPath(filePath: string): string {
+  try {
+    return realpathSync(filePath);
+  } catch {
+    const parent = dirname(filePath);
+    if (parent === filePath) return filePath;
+    return join(resolveRealPath(parent), basename(filePath));
+  }
+}
+
+/**
+ * Resolve `filePath` against the chat's working dir and verify the result
+ * stays inside it. Rejects escapes via `..`, absolute paths, and symlinks.
+ */
+function resolvePath(
+  ctx: ToolContext,
+  filePath: string,
+): { ok: true; path: string } | { ok: false; error: string } {
+  const raw = filePath.startsWith("/")
+    ? filePath
+    : join(ctx.workingDir, filePath);
+  const resolved = resolveRealPath(raw);
+
+  // Compare against the REAL working dir: on macOS /var is a symlink to
+  // /private/var, so realpath'ing a file inside workingDir yields a different
+  // prefix than the un-resolved workingDir string.
+  const realWorkingDir = resolveRealPath(ctx.workingDir);
+  const prefix = realWorkingDir.endsWith(sep)
+    ? realWorkingDir
+    : realWorkingDir + sep;
+  if (resolved !== realWorkingDir && !resolved.startsWith(prefix)) {
+    return {
+      ok: false,
+      error: "Access denied: path escapes working directory",
+    };
+  }
+  if (isPathBlocked(resolved)) {
+    return { ok: false, error: "Access denied: sensitive path" };
+  }
+  return { ok: true, path: resolved };
 }
 
 export const readFileTool: Tool = {
@@ -54,9 +97,9 @@ export const readFileTool: Tool = {
     input: { path: string; offset?: number; limit?: number },
     ctx: ToolContext,
   ): Promise<ToolResult> {
-    const fullPath = resolvePath(ctx, input.path);
-    if (isPathBlocked(fullPath))
-      return { output: "Access denied: sensitive path", isError: true };
+    const resolved = resolvePath(ctx, input.path);
+    if (!resolved.ok) return { output: resolved.error, isError: true };
+    const fullPath = resolved.path;
     if (!existsSync(fullPath))
       return { output: `File not found: ${input.path}`, isError: true };
 
@@ -96,9 +139,9 @@ export const writeFileTool: Tool = {
     input: { path: string; content: string },
     ctx: ToolContext,
   ): Promise<ToolResult> {
-    const fullPath = resolvePath(ctx, input.path);
-    if (isPathBlocked(fullPath))
-      return { output: "Access denied: sensitive path", isError: true };
+    const resolved = resolvePath(ctx, input.path);
+    if (!resolved.ok) return { output: resolved.error, isError: true };
+    const fullPath = resolved.path;
 
     try {
       const dir = dirname(fullPath);
@@ -144,9 +187,9 @@ export const editFileTool: Tool = {
     },
     ctx: ToolContext,
   ): Promise<ToolResult> {
-    const fullPath = resolvePath(ctx, input.path);
-    if (isPathBlocked(fullPath))
-      return { output: "Access denied: sensitive path", isError: true };
+    const resolved = resolvePath(ctx, input.path);
+    if (!resolved.ok) return { output: resolved.error, isError: true };
+    const fullPath = resolved.path;
     if (!existsSync(fullPath))
       return { output: `File not found: ${input.path}`, isError: true };
 
@@ -194,13 +237,23 @@ export const globTool: Tool = {
     input: { pattern: string; path?: string },
     ctx: ToolContext,
   ): Promise<ToolResult> {
+    if (/\.\.(\/|\\)/.test(input.pattern) || input.pattern.startsWith("/")) {
+      return {
+        output: "Access denied: glob pattern escapes working directory",
+        isError: true,
+      };
+    }
     const searchDir = input.path
       ? resolvePath(ctx, input.path)
-      : ctx.workingDir;
+      : { ok: true as const, path: ctx.workingDir };
+    if (!searchDir.ok) return { output: searchDir.error, isError: true };
     try {
       const glob = new Glob(input.pattern);
       const matches: string[] = [];
-      for await (const file of glob.scan({ cwd: searchDir, absolute: false })) {
+      for await (const file of glob.scan({
+        cwd: searchDir.path,
+        absolute: false,
+      })) {
         matches.push(file);
         if (matches.length >= 500) break;
       }
@@ -246,7 +299,8 @@ export const grepTool: Tool = {
   ): Promise<ToolResult> {
     const searchPath = input.path
       ? resolvePath(ctx, input.path)
-      : ctx.workingDir;
+      : { ok: true as const, path: ctx.workingDir };
+    if (!searchPath.ok) return { output: searchPath.error, isError: true };
     const maxResults = input.max_results || 50;
 
     try {
@@ -258,7 +312,7 @@ export const grepTool: Tool = {
         String(maxResults),
       ];
       if (input.glob) args.push("--glob", input.glob);
-      args.push(input.pattern, searchPath);
+      args.push(input.pattern, searchPath.path);
 
       const proc = Bun.spawn(args, { stdout: "pipe", stderr: "pipe" });
       const stdout = await new Response(proc.stdout).text();
@@ -307,9 +361,9 @@ export const grepTool: Tool = {
           }
         }
 
-        const stat = statSync(searchPath);
-        if (stat.isFile()) searchFile(searchPath);
-        else walkDir(searchPath);
+        const stat = statSync(searchPath.path);
+        if (stat.isFile()) searchFile(searchPath.path);
+        else walkDir(searchPath.path);
 
         return {
           output: results.length > 0 ? results.join("\n") : "No matches found",

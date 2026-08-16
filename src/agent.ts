@@ -1,6 +1,7 @@
 import type { Database } from "bun:sqlite";
 import { existsSync, mkdirSync, readFileSync } from "fs";
 import { join } from "path";
+import { withChatLock } from "./chat_lock";
 import type { AngelConfig } from "./config";
 import {
   loadSession,
@@ -36,6 +37,19 @@ export interface AgentOptions {
 export const INTERRUPTED = Symbol("interrupted");
 
 export async function processMessage(
+  userMessage: string,
+  opts: AgentOptions,
+  image?: { base64: string; mimeType: string },
+): Promise<string | typeof INTERRUPTED> {
+  // All entry points (message handler, scheduler, notifiers, subagents) route
+  // through here, and all of them load/mutate/save the same per-chat session
+  // row — so concurrent runs on one chatId must serialize.
+  return withChatLock(opts.chatId, () =>
+    processMessageUnlocked(userMessage, opts, image),
+  );
+}
+
+async function processMessageUnlocked(
   userMessage: string,
   opts: AgentOptions,
   image?: { base64: string; mimeType: string },
@@ -84,7 +98,7 @@ Be warm and conversational, not like a form. Ask 2-3 questions at a time max. Us
   }
 
   if (messages.length > config.compaction_threshold) {
-    messages = await compactMessages(messages, config, db, chatId);
+    messages = await compactMessages(messages, config, db, chatId, opts.signal);
   }
 
   const tools = registry.getDefinitions();
@@ -138,6 +152,7 @@ Be warm and conversational, not like a form. Ask 2-3 questions at a time max. Us
     const response = await chatComplete(config, allMessages, tools, {
       model: selectedModel,
       onTextDelta: opts.onTextDelta,
+      signal: opts.signal,
     });
     const durationMs = Date.now() - start;
 
@@ -150,6 +165,11 @@ Be warm and conversational, not like a form. Ask 2-3 questions at a time max. Us
       durationMs,
       modelContext,
     );
+
+    if (opts.signal?.aborted) {
+      saveSession(db, chatId, JSON.stringify(messages));
+      return INTERRUPTED;
+    }
 
     if (response.toolCalls.length === 0) {
       finalText = response.text;
@@ -257,6 +277,11 @@ Be warm and conversational, not like a form. Ask 2-3 questions at a time max. Us
     finalText =
       finalText ||
       "Reached maximum tool iterations. Here is what I have so far.";
+  }
+
+  if (opts.signal?.aborted) {
+    saveSession(db, chatId, JSON.stringify(messages));
+    return INTERRUPTED;
   }
 
   saveSession(db, chatId, JSON.stringify(messages));
@@ -398,6 +423,7 @@ async function compactMessages(
   config: AngelConfig,
   db: Database,
   chatId: number,
+  signal?: AbortSignal,
 ): Promise<LlmMessage[]> {
   const keepRecent = config.compaction_keep_recent;
   if (messages.length <= keepRecent + 2) return messages;
@@ -431,6 +457,7 @@ async function compactMessages(
     const response = await chatComplete(config, summaryPrompt, [], {
       model,
       maxTokens: 1024,
+      signal,
     });
     logUsage(
       db,

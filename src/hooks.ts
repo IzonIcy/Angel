@@ -56,6 +56,7 @@ export async function runHook(
   if (hooks.length === 0) return null;
 
   for (const hook of hooks) {
+    let timer: ReturnType<typeof setTimeout> | undefined;
     try {
       const proc = Bun.spawn(["bash", "-c", hook.command], {
         stdin: "pipe",
@@ -67,17 +68,53 @@ export async function runHook(
       stdin.write(JSON.stringify({ event, data }));
       stdin.end();
 
-      const timer = setTimeout(() => proc.kill(), hook.timeout_ms);
+      timer = setTimeout(() => proc.kill(), hook.timeout_ms);
       const stdout = await new Response(proc.stdout).text();
       clearTimeout(timer);
+      timer = undefined;
       await proc.exited;
 
+      if (proc.exitCode !== 0) {
+        console.error(
+          `[angel] Hook "${hook.name}" (${event}) exited with code ${proc.exitCode}`,
+        );
+        // Fail closed: a non-zero exit means the hook failed.
+        return {
+          action: "block",
+          reason: `Hook ${hook.name} failed (exit ${proc.exitCode})`,
+        };
+      }
+
       if (stdout.trim()) {
-        const result = JSON.parse(stdout.trim());
+        let result: HookOutcome;
+        try {
+          result = JSON.parse(stdout.trim());
+        } catch (err: any) {
+          console.error(
+            `[angel] Hook "${hook.name}" (${event}) returned invalid JSON: ${err.message}`,
+          );
+          // Fail closed: a hook we can't parse is a hook we can't trust.
+          return {
+            action: "block",
+            reason: `Hook ${hook.name} returned invalid output`,
+          };
+        }
         if (result.action === "block") return result;
         if (result.action === "modify") return result;
       }
-    } catch {}
+    } catch (err: any) {
+      console.error(
+        `[angel] Hook "${hook.name}" (${event}) failed: ${err.message}`,
+      );
+      // Fail closed: a blocking hook that crashes, times out, or emits bad
+      // JSON must not silently permit the action it exists to stop.
+      return {
+        action: "block",
+        reason: `Hook ${hook.name} failed`,
+      };
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
   }
 
   return { action: "allow" };

@@ -1,5 +1,6 @@
 import { htmlToText } from "./html";
 import type { Tool, ToolResult } from "./registry";
+import { assertSafeUrl, fetchSafe } from "./ssrf";
 
 export const browserTool: Tool = {
   name: "browser",
@@ -30,6 +31,16 @@ export const browserTool: Tool = {
     selector?: string;
     text?: string;
   }): Promise<ToolResult> {
+    // Validate before the headless browser (or the fetch fallback) ever
+    // touches the URL. Playwright navigation follows redirects internally,
+    // so we can't re-check every hop — but the initial target is the one the
+    // prompt controls, and the fetchFallback path below is fully guarded.
+    try {
+      await assertSafeUrl(input.url);
+    } catch (err: any) {
+      return { output: err.message, isError: true };
+    }
+
     // JSON.stringify produces a proper JS string literal, so the URL cannot
     // break out of the inline script (unlike manual quote-escaping).
     const urlLiteral = JSON.stringify(input.url);
@@ -73,7 +84,7 @@ export const browserTool: Tool = {
 // If the headless browser isn't available, fall back to a plain fetch and
 // DOM-parse the result (no regex HTML mangling).
 async function fetchFallback(url: string): Promise<ToolResult> {
-  const resp = await fetch(url, {
+  const resp = await fetchSafe(url, {
     headers: { "User-Agent": "Angel/1.0" },
   });
   const html = await resp.text();
