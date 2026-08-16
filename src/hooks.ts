@@ -16,14 +16,18 @@ interface HookDef {
   enabled: boolean;
 }
 
-let hooksCache: HookDef[] | null = null;
+// Cache is keyed by hooks directory: two configs with different hooks dirs
+// (or hook files edited at runtime) must not see each other's definitions.
+// Tests rely on this too — a hooks cache from one test file must not leak
+// into another's config.
+let hooksCache: { dir: string; hooks: HookDef[] } | null = null;
 
 function loadHooks(config: AngelConfig): HookDef[] {
-  if (hooksCache) return hooksCache;
-
   const dir = config.hooks_dir || join(config.data_dir, "hooks");
+  if (hooksCache && hooksCache.dir === dir) return hooksCache.hooks;
+
   if (!existsSync(dir)) {
-    hooksCache = [];
+    hooksCache = { dir, hooks: [] };
     return [];
   }
 
@@ -43,7 +47,7 @@ function loadHooks(config: AngelConfig): HookDef[] {
     } catch {}
   }
 
-  hooksCache = hooks;
+  hooksCache = { dir, hooks };
   return hooks;
 }
 
