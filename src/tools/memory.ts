@@ -1,6 +1,11 @@
 import { existsSync, readFileSync } from "fs";
 import { join } from "path";
-import { archiveMemory, getMemories, insertMemory } from "../db";
+import {
+  archiveMemory,
+  getMemories,
+  insertMemory,
+  type MemoryRow,
+} from "../db";
 import { writeAgentsMd } from "../memory";
 import type { Tool, ToolContext, ToolResult } from "./registry";
 
@@ -39,7 +44,7 @@ export const readMemoryTool: Tool = {
     ctx: ToolContext,
   ): Promise<ToolResult> {
     const limit = input.limit || 20;
-    let memories: any[] = [];
+    let memories: MemoryRow[] = [];
 
     if (input.scope === "global") {
       memories = getMemories(ctx.db, null, limit);
@@ -48,7 +53,7 @@ export const readMemoryTool: Tool = {
         .query(
           "SELECT * FROM memories WHERE chat_id = ? AND is_archived = 0 ORDER BY updated_at DESC LIMIT ?",
         )
-        .all(ctx.chatId, limit);
+        .all(ctx.chatId, limit) as MemoryRow[];
     } else {
       memories = getMemories(ctx.db, ctx.chatId, limit);
     }
@@ -65,7 +70,7 @@ export const readMemoryTool: Tool = {
       output += `[Structured Memories (${memories.length})]\n`;
       output += memories
         .map(
-          (m: any) =>
+          (m) =>
             `#${m.id} [${m.category}] ${m.content} (source: ${m.source}, confidence: ${m.confidence})`,
         )
         .join("\n");
@@ -219,15 +224,15 @@ export const searchMemoryTool: Tool = {
     const all = getMemories(ctx.db, ctx.chatId, 100);
 
     const scored = all
-      .map((m: any) => {
+      .map((m) => {
         const content = m.content.toLowerCase();
         const score =
           keywords.filter((k: string) => content.includes(k)).length /
           keywords.length;
         return { ...m, score };
       })
-      .filter((m: any) => m.score > 0)
-      .sort((a: any, b: any) => b.score - a.score)
+      .filter((m) => m.score > 0)
+      .sort((a, b) => b.score - a.score)
       .slice(0, limit);
 
     if (scored.length === 0) return { output: "No matching memories." };
@@ -235,7 +240,7 @@ export const searchMemoryTool: Tool = {
     return {
       output: scored
         .map(
-          (m: any) =>
+          (m) =>
             `#${m.id} [${m.category}] ${m.content} (relevance: ${(m.score * 100).toFixed(0)}%)`,
         )
         .join("\n"),

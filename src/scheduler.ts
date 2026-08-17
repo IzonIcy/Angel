@@ -47,6 +47,13 @@ async function tick(
     if (!claimScheduledTask(db, task.id)) continue;
 
     try {
+      // A task without a chat can't be delivered anywhere — same fate as an
+      // unknown chat id.
+      if (task.chat_id === null) {
+        updateTaskStatus(db, task.id, "failed");
+        continue;
+      }
+
       const chatRow = db
         .query("SELECT * FROM chats WHERE id = ?")
         .get(task.chat_id) as any;

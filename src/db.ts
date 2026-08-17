@@ -2,6 +2,53 @@ import { Database } from "bun:sqlite";
 import { existsSync, mkdirSync } from "fs";
 import { join } from "path";
 
+// Row types matching the sqlite schemas in this file. SQLite returns
+// numbers for INTEGER/REAL columns and null for nullable columns.
+export interface MessageRow {
+  id: string;
+  chat_id: number;
+  role: string;
+  sender_name: string | null;
+  content: string;
+  tool_calls: string | null;
+  tool_call_id: string | null;
+  is_from_bot: number;
+  timestamp: string;
+}
+
+export interface MemoryRow {
+  id: number;
+  chat_id: number | null;
+  content: string;
+  category: string;
+  confidence: number;
+  source: string;
+  is_archived: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ScheduledTaskRow {
+  id: number;
+  chat_id: number | null;
+  name: string | null;
+  prompt: string;
+  cron_expr: string | null;
+  next_run_at: string | null;
+  status: string;
+  timezone: string;
+  max_retries: number;
+  retry_count: number;
+  created_at: string;
+}
+
+export interface UsageStatsRow {
+  model: string;
+  total_input: number;
+  total_output: number;
+  calls: number;
+}
+
 let _db: Database | null = null;
 
 export function getDb(dataDir: string): Database {
@@ -429,13 +476,13 @@ export function getRecentMessages(
   db: Database,
   chatId: number,
   limit: number,
-): any[] {
+): MessageRow[] {
   return db
     .query(
       `SELECT * FROM messages WHERE chat_id = ? ORDER BY timestamp DESC LIMIT ?`,
     )
     .all(chatId, limit)
-    .reverse();
+    .reverse() as MessageRow[];
 }
 
 export function saveSession(
@@ -462,19 +509,19 @@ export function getMemories(
   db: Database,
   chatId: number | null,
   limit = 20,
-): any[] {
+): MemoryRow[] {
   if (chatId !== null) {
     return db
       .query(
         `SELECT * FROM memories WHERE (chat_id = ? OR chat_id IS NULL) AND is_archived = 0 ORDER BY updated_at DESC LIMIT ?`,
       )
-      .all(chatId, limit);
+      .all(chatId, limit) as MemoryRow[];
   }
   return db
     .query(
       `SELECT * FROM memories WHERE chat_id IS NULL AND is_archived = 0 ORDER BY updated_at DESC LIMIT ?`,
     )
-    .all(limit);
+    .all(limit) as MemoryRow[];
 }
 
 export function insertMemory(
@@ -517,12 +564,12 @@ export function logUsage(
   );
 }
 
-export function getScheduledTasksDue(db: Database): any[] {
+export function getScheduledTasksDue(db: Database): ScheduledTaskRow[] {
   return db
     .query(
       `SELECT * FROM scheduled_tasks WHERE status = 'active' AND next_run_at <= datetime('now')`,
     )
-    .all();
+    .all() as ScheduledTaskRow[];
 }
 
 /**
@@ -604,7 +651,7 @@ export function updateScheduledTask(
   },
 ) {
   const sets: string[] = [];
-  const params: any[] = [];
+  const params: (string | number | null)[] = [];
   if (fields.name !== undefined) {
     sets.push("name = ?");
     params.push(fields.name);
@@ -637,7 +684,7 @@ export function updateScheduledTask(
 export function insertTaskDlq(
   db: Database,
   taskId: number,
-  chatId: number,
+  chatId: number | null,
   errorText: string,
   prompt: string,
   retryCount: number,
@@ -648,14 +695,14 @@ export function insertTaskDlq(
   );
 }
 
-export function getUsageStats(db: Database, days = 30): any[] {
+export function getUsageStats(db: Database, days = 30): UsageStatsRow[] {
   return db
     .query(
       `SELECT model, SUM(input_tokens) as total_input, SUM(output_tokens) as total_output, COUNT(*) as calls
      FROM llm_usage_logs WHERE created_at >= datetime('now', '-' || ? || ' days')
      GROUP BY model ORDER BY total_input DESC`,
     )
-    .all(days);
+    .all(days) as UsageStatsRow[];
 }
 
 export function getUsageTotalsForWindow(

@@ -62,7 +62,7 @@ export function handleCommand(
       return {
         handled: true,
         text: memories
-          .map((m: any) => `#${m.id} [${m.category}] ${m.content}`)
+          .map((m) => `#${m.id} [${m.category}] ${m.content}`)
           .join("\n"),
       };
     }
@@ -74,7 +74,7 @@ export function handleCommand(
         handled: true,
         text: stats
           .map(
-            (s: any) =>
+            (s) =>
               `${s.model}: ${s.calls} calls, ${s.total_input} input tokens, ${s.total_output} output tokens`,
           )
           .join("\n"),

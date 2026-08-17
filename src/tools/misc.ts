@@ -141,7 +141,7 @@ export const exportChatTool: Tool = {
     ctx: ToolContext,
   ): Promise<ToolResult> {
     const messages = getRecentMessages(ctx.db, ctx.chatId, input.limit || 100);
-    const lines = messages.map((m: any) => {
+    const lines = messages.map((m) => {
       const role = m.is_from_bot ? "Angel" : m.sender_name || "User";
       return `### ${role} (${m.timestamp})\n\n${m.content}\n`;
     });
@@ -368,7 +368,7 @@ export const readChatHistoryTool: Tool = {
 
     return {
       output: messages
-        .map((m: any) => {
+        .map((m) => {
           const who = m.is_from_bot ? "Angel" : m.sender_name || "User";
           return `[${m.timestamp}] ${who}: ${m.content?.slice(0, 500) || "[no content]"}`;
         })
