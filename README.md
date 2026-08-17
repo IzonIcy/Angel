@@ -1,4 +1,6 @@
 <div align="center">
+
+[![CI](https://github.com/IzonIcy/Angel/actions/workflows/ci.yml/badge.svg)](https://github.com/IzonIcy/Angel/actions/workflows/ci.yml)
     <img src="assets/weeping_angel.png" width="120" />
     <h3>Angel</h3>
     <p>Autonomous AI agent with multi-channel support, persistent memory, and an extensible tool system</p>
