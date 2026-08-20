@@ -1,16 +1,18 @@
 version: 2
 updates:
   - package-ecosystem: npm
-    directory: /
+    directory: "/"
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
     groups:
-      bun-dependencies:
-        patterns:
-          - "*"
+      patch-and-minor:
+        update-types:
+          - "patch"
+          - "minor"
 
   - package-ecosystem: github-actions
-    directory: /
+    directory: "/"
     schedule:
       interval: weekly
+    open-pull-requests-limit: 5
