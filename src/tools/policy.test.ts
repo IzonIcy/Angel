@@ -21,6 +21,11 @@ beforeAll(() => {
     db,
     config: { ...DEFAULTS, data_dir: dataDir },
   };
+  // Hermetic ruleset: db.ts caches a module-level Database singleton, so
+  // when worker scheduling shares it across test files (observed on the
+  // CI runner), rows inserted by e.g. advanced.test.ts leak in and would
+  // break these "empty ruleset" cases.
+  db.run("DELETE FROM execution_policies");
 });
 
 const highRiskTool = {
