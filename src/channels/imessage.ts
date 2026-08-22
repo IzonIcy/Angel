@@ -214,6 +214,7 @@ export class iMessageChannel implements ChannelAdapter {
       externalChatId,
       chatType: isGroup ? "imessage_group" : "imessage_private",
       senderName: sender,
+      senderId: sender,
       text,
       isGroupMention: isGroup,
       senderDmId: !isGroup ? sender : undefined,

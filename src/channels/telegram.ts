@@ -73,6 +73,7 @@ export class TelegramChannel implements ChannelAdapter {
                 .filter(Boolean)
                 .join(" ") ??
               "unknown",
+            senderId: msg.from?.id != null ? String(msg.from.id) : undefined,
             text: msg.text,
             replyToMessageId: msg.reply_to_message?.message_id
               ? String(msg.reply_to_message.message_id)
@@ -115,6 +116,8 @@ export class TelegramChannel implements ChannelAdapter {
 }
 
 type TgUser = {
+  /** Stable numeric user id from the Bot API — the only non-spoofable identity. */
+  id?: number;
   username?: string;
   first_name?: string;
   last_name?: string;

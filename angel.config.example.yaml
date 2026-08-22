@@ -65,6 +65,15 @@ proactive:
   enabled: true
   inactivity_default_minutes: 720
 
+# Optional read-only status page + Prometheus metrics. OFF by default.
+# Binds to loopback unless you explicitly set hostname — do not expose it
+# without setting `token` (requests then need `Authorization: Bearer <token>`).
+# dashboard:
+#   enabled: true
+#   port: 8642
+#   hostname: "127.0.0.1"
+#   token: "share-with-metrics-scraper-only"
+
 # mcp_servers:
 #   filesystem:
 #     command: "npx"

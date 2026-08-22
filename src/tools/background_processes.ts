@@ -1,5 +1,6 @@
 import { existsSync, readFileSync, unlinkSync, writeFileSync } from "fs";
 import { join } from "path";
+import { sanitizedEnv, scrubSecrets } from "../secrets";
 import type { Tool, ToolContext, ToolResult } from "./registry";
 
 export interface BackgroundProcess {
@@ -64,24 +65,6 @@ function isCommandBlocked(command: string): string | null {
     }
   }
   return null;
-}
-
-// Secret scrubbing for output
-const SECRET_PATTERNS = [
-  /sk-[a-zA-Z0-9]{20,}/g,
-  /xoxb-[a-zA-Z0-9-]+/g,
-  /xapp-[a-zA-Z0-9-]+/g,
-  /ghp_[a-zA-Z0-9]{36}/g,
-  /gho_[a-zA-Z0-9]{36}/g,
-  /-----BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY-----/g,
-];
-
-function scrubSecrets(text: string): string {
-  let scrubbed = text;
-  for (const pattern of SECRET_PATTERNS) {
-    scrubbed = scrubbed.replace(pattern, "[REDACTED]");
-  }
-  return scrubbed;
 }
 
 export const spawnBackgroundProcessTool: Tool = {
@@ -171,7 +154,7 @@ export const spawnBackgroundProcessTool: Tool = {
         stdout: "pipe",
         stderr: "pipe",
         env: {
-          ...process.env,
+          ...sanitizedEnv(),
           HOME: process.env.HOME || "",
           TERM: "dumb",
           NO_COLOR: "1",

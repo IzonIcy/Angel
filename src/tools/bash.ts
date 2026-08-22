@@ -1,3 +1,4 @@
+import { sanitizedEnv, scrubSecrets } from "../secrets";
 import type { Tool, ToolContext, ToolResult } from "./registry";
 
 const BLOCKED_HARD: [RegExp, string][] = [
@@ -66,23 +67,6 @@ const BLOCKED_HARD: [RegExp, string][] = [
   [/spctl\s+--master-disable/, "disable Gatekeeper"],
 ];
 
-const BLOCKED_SECRETS_IN_OUTPUT = [
-  /sk-[a-zA-Z0-9]{20,}/,
-  /xoxb-[a-zA-Z0-9-]+/,
-  /xapp-[a-zA-Z0-9-]+/,
-  /ghp_[a-zA-Z0-9]{36}/,
-  /gho_[a-zA-Z0-9]{36}/,
-  /-----BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY-----/,
-];
-
-function scrubSecrets(output: string): string {
-  let scrubbed = output;
-  for (const pattern of BLOCKED_SECRETS_IN_OUTPUT) {
-    scrubbed = scrubbed.replace(new RegExp(pattern.source, "g"), "[REDACTED]");
-  }
-  return scrubbed;
-}
-
 export const bashTool: Tool = {
   name: "bash",
   description:
@@ -120,7 +104,9 @@ export const bashTool: Tool = {
         cwd: ctx.workingDir,
         stdout: "pipe",
         stderr: "pipe",
-        env: { ...process.env, HOME: process.env.HOME || "" },
+        // Credential-bearing variables are stripped; a full env spread would
+        // let `echo $ANTHROPIC_API_KEY` leak tokens into LLM context.
+        env: { ...sanitizedEnv(), HOME: process.env.HOME || "" },
       });
 
       const timer = setTimeout(() => proc.kill(), timeout);

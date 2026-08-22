@@ -29,13 +29,23 @@ const HTML_PAGE = `<!doctype html>
   <table id="stats"></table>
   <p><a href="/metrics">/metrics</a> &middot; refreshes every 5s</p>
   <script>
+    // textContent (not innerHTML): stats must never become a DOM-XSS vector
+    // if a string field ever sneaks into the payload.
     async function refresh() {
       const res = await fetch('/api/stats');
       const stats = await res.json();
-      const rows = Object.entries(stats).map(
-        ([k, v]) => '<tr><td>' + k + '</td><td class="ok">' + v + '</td></tr>'
-      );
-      document.getElementById('stats').innerHTML = rows.join('');
+      const table = document.getElementById('stats');
+      table.textContent = '';
+      for (const [k, v] of Object.entries(stats)) {
+        const tr = document.createElement('tr');
+        const tdKey = document.createElement('td');
+        tdKey.textContent = k;
+        const tdVal = document.createElement('td');
+        tdVal.className = 'ok';
+        tdVal.textContent = String(v);
+        tr.append(tdKey, tdVal);
+        table.appendChild(tr);
+      }
     }
     refresh();
     setInterval(refresh, 5000);
@@ -91,8 +101,19 @@ export function startDashboard(deps: DashboardDeps): {
 
   const server = Bun.serve({
     port,
+    // Default to loopback. Bun's implicit default is all interfaces, which
+    // would expose this unauthenticated surface to the LAN.
+    hostname: deps.config.dashboard?.hostname ?? "127.0.0.1",
     async fetch(request) {
       const url = new URL(request.url);
+
+      const requiredToken = deps.config.dashboard?.token;
+      if (requiredToken) {
+        const auth = request.headers.get("authorization");
+        if (auth !== `Bearer ${requiredToken}`) {
+          return new Response("unauthorized", { status: 401 });
+        }
+      }
 
       if (url.pathname === "/metrics") {
         const s = collectStats();
@@ -129,6 +150,8 @@ export function startDashboard(deps: DashboardDeps): {
     },
   });
 
-  console.log(`[angel] dashboard listening on http://127.0.0.1:${server.port}`);
+  console.log(
+    `[angel] dashboard listening on http://${server.hostname}:${server.port}`,
+  );
   return { stop: () => server.stop(true), port };
 }

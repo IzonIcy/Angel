@@ -34,6 +34,7 @@ export class SlackChannel implements ChannelAdapter {
         externalChatId: event.channel,
         chatType: "slack_channel",
         senderName: event.user,
+        senderId: event.user,
         text,
         isGroupMention: true,
       };
@@ -52,6 +53,7 @@ export class SlackChannel implements ChannelAdapter {
         externalChatId: event.channel,
         chatType: "slack_dm",
         senderName: event.user,
+        senderId: event.user,
         text: event.text || "",
       };
 

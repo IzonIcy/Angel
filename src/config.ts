@@ -45,6 +45,11 @@ export interface SecurityConfig {
 export interface DashboardConfig {
   enabled?: boolean;
   port?: number;
+  /** Bind address. Defaults to loopback — binding a non-loopback interface
+   * exposes an unauthenticated status/metrics endpoint to the network. */
+  hostname?: string;
+  /** When set, requests must send `Authorization: Bearer <token>`. */
+  token?: string;
 }
 
 export interface MemoryConfig {
@@ -380,6 +385,18 @@ export function validateConfig(config: unknown): AngelConfig {
         ) {
           errors.push("dashboard.port must be a number");
         }
+        if (
+          config.dashboard.hostname !== undefined &&
+          typeof config.dashboard.hostname !== "string"
+        ) {
+          errors.push("dashboard.hostname must be a string");
+        }
+        if (
+          config.dashboard.token !== undefined &&
+          typeof config.dashboard.token !== "string"
+        ) {
+          errors.push("dashboard.token must be a string");
+        }
       }
     }
 
@@ -521,7 +538,8 @@ export function saveConfig(config: Partial<AngelConfig>): void {
     require("fs").mkdirSync(dir, { recursive: true });
   }
   const yaml = stringifyYaml(config);
-  require("fs").writeFileSync(path, yaml, "utf-8");
+  // 0600: the config carries channel tokens and API keys in plaintext.
+  require("fs").writeFileSync(path, yaml, { encoding: "utf-8", mode: 0o600 });
 }
 
 function deepMerge(target: any, source: any): any {
@@ -542,9 +560,17 @@ function deepMerge(target: any, source: any): any {
   return result;
 }
 
+/** Unresolved `${VAR}` references collected during resolveEnvVars, so a
+ * typo'd reference surfaces loudly instead of silently becoming "". */
+export const unresolvedEnvVars = new Set<string>();
+
 export function resolveEnvVars(obj: any): any {
   if (typeof obj === "string") {
-    return obj.replace(/\$\{(\w+)\}/g, (_, name) => process.env[name] || "");
+    return obj.replace(/\$\{(\w+)\}/g, (_, name) => {
+      const value = process.env[name];
+      if (value === undefined) unresolvedEnvVars.add(name);
+      return value ?? "";
+    });
   }
   if (Array.isArray(obj)) return obj.map(resolveEnvVars);
   if (obj && typeof obj === "object") {

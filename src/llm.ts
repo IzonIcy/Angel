@@ -33,7 +33,7 @@ function computeFingerprint(firstUserMessage: string): string {
   return createHash("sha256").update(input).digest("hex").slice(0, 3);
 }
 
-function isClaudeModel(model: string): boolean {
+export function isClaudeModel(model: string): boolean {
   return model.startsWith("claude-");
 }
 

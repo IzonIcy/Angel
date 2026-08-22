@@ -74,10 +74,15 @@ export function createMessageHandler(deps: MessageHandlerDeps): MessageHandler {
     const channelKey = msg.chatType.split("_")[0];
     const adapter = channels.get(channelKey);
 
-    const verdict = rateLimiter.check(channelKey, msg.senderName);
+    // Rate limits and allowlists key on the platform-stable id. Display names
+    // are user-mutable: anyone could rename themselves to an allowlisted
+    // user's name (or rotate names to mint fresh rate-limit buckets).
+    const senderKey = msg.senderId ?? msg.senderName;
+
+    const verdict = rateLimiter.check(channelKey, senderKey);
     if (!verdict.allowed) {
       console.warn(
-        `[angel] rate limit hit for ${channelKey}:${msg.senderName} (retry in ${verdict.retryAfterSeconds}s)`,
+        `[angel] rate limit hit for ${channelKey}:${senderKey} (retry in ${verdict.retryAfterSeconds}s)`,
       );
       return;
     }
@@ -93,7 +98,12 @@ export function createMessageHandler(deps: MessageHandlerDeps): MessageHandler {
       channelKey,
       channelConfig?.allowed_users,
     );
-    if (allowedUsers && !allowedUsers.has(msg.senderName)) {
+    if (allowedUsers && !allowedUsers.has(senderKey)) {
+      // Log both keys so operators migrating name-based entries to platform
+      // ids can see exactly why a sender was rejected.
+      console.warn(
+        `[angel] rejected sender ${channelKey}:${msg.senderName} (id=${msg.senderId ?? "none"}) — not in allowlist`,
+      );
       return;
     }
 

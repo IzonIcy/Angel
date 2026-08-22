@@ -2,6 +2,12 @@ export interface IncomingMessage {
   externalChatId: string;
   chatType: string;
   senderName: string;
+  /**
+   * Platform-stable sender identity (Discord/Telegram user id, Slack user id,
+   * Signal phone number, iMessage handle). Allowlists and rate limits MUST
+   * key on this — display names are user-mutable and therefore spoofable.
+   */
+  senderId?: string;
   text: string;
   imageBase64?: string;
   imageMimeType?: string;

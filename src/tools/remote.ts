@@ -1,4 +1,5 @@
 import { loadConfig } from "../config";
+import { scrubSecrets } from "../secrets";
 import type { Tool, ToolContext, ToolResult } from "./registry";
 
 function getRemoteConfig() {
@@ -33,21 +34,6 @@ const BLOCKED_REMOTE: [RegExp, string][] = [
   [/passwd/, "change passwords"],
   [/sudo\s+visudo/, "edit sudoers"],
 ];
-
-const BLOCKED_SECRETS_IN_OUTPUT = [
-  /sk-[a-zA-Z0-9]{20,}/,
-  /xoxb-[a-zA-Z0-9-]+/,
-  /ghp_[a-zA-Z0-9]{36}/,
-  /-----BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY-----/,
-];
-
-function scrubSecrets(output: string): string {
-  let scrubbed = output;
-  for (const pattern of BLOCKED_SECRETS_IN_OUTPUT) {
-    scrubbed = scrubbed.replace(new RegExp(pattern.source, "g"), "[REDACTED]");
-  }
-  return scrubbed;
-}
 
 export const remoteStatusTool: Tool = {
   name: "remote_status",

@@ -1,4 +1,5 @@
 import type { Database } from "bun:sqlite";
+import pkg from "../package.json";
 import type { AngelConfig } from "./config";
 import { getMemories, getObservabilitySnapshot, getUsageStats } from "./db";
 
@@ -142,7 +143,7 @@ Channels: ${enabledChannels.join(", ")}`,
       return { handled: true, text: "Restarting...", action: "restart" };
 
     case "/version":
-      return { handled: true, text: "Angel v0.1.0" };
+      return { handled: true, text: `Angel v${pkg.version}` };
 
     default:
       return { text: "", handled: false };

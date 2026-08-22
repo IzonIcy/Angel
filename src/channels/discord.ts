@@ -42,6 +42,7 @@ export class DiscordChannel implements ChannelAdapter {
         externalChatId: msg.channel.id,
         chatType: isDM ? "discord_dm" : "discord_guild",
         senderName: msg.author.displayName || msg.author.username,
+        senderId: msg.author.id,
         text,
         isGroupMention: !isDM && isMentioned,
         senderDmId: msg.author.id,

@@ -134,5 +134,16 @@ export function evaluateExecutionPolicy(
     };
   }
 
+  // No rule matched. Unconfigured must not mean "allow everything": high-risk
+  // tools fall back to requiring confirmation so a misconfigured or empty
+  // ruleset fails safe instead of fail-open.
+  if (tool.risk === "high") {
+    return {
+      allowed: false,
+      requireConfirmation: true,
+      reason: "No matching execution policy for a high-risk tool",
+    };
+  }
+
   return { allowed: true, requireConfirmation: false };
 }

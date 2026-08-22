@@ -1,5 +1,6 @@
 import { existsSync, readFileSync, unlinkSync, writeFileSync } from "fs";
 import { join } from "path";
+import { sanitizedEnv } from "../secrets";
 import type { Tool, ToolContext, ToolResult } from "./registry";
 
 interface AgentDef {
@@ -272,7 +273,7 @@ export const spawnCodingAgentTool: Tool = {
         cwd,
         stdout: "pipe",
         stderr: "pipe",
-        env: { ...process.env, TERM: "dumb", NO_COLOR: "1" },
+        env: { ...sanitizedEnv(), TERM: "dumb", NO_COLOR: "1" },
       });
       entry.process = proc;
 

@@ -4,6 +4,34 @@ import { homedir } from "os";
 import { join } from "path";
 import type { ChannelAdapter, IncomingMessage, MessageHandler } from "./types";
 
+/**
+ * Resolves an attachment's on-disk path safely.
+ *
+ * Prefers signal-cli's opaque attachment id. Falls back to the envelope
+ * filename only when it is a bare name — path separators and `..` are
+ * rejected so a crafted envelope cannot traverse out of the attachments
+ * directory. Without this check an authorized sender becomes a local
+ * file-read primitive (the file ships base64 into LLM context).
+ */
+function safeAttachmentPath(
+  attDir: string,
+  attachment: { id?: string; filename?: string },
+): string | null {
+  const candidate = attachment.id || attachment.filename;
+  if (!candidate) return null;
+  if (
+    candidate.includes("/") ||
+    candidate.includes("\\") ||
+    candidate.includes("..")
+  ) {
+    console.warn(
+      `[angel] Signal attachment rejected (unsafe name): ${JSON.stringify(candidate)}`,
+    );
+    return null;
+  }
+  return join(attDir, candidate);
+}
+
 export class SignalChannel implements ChannelAdapter {
   name = "signal";
   maxMessageLength = 6000;
@@ -84,7 +112,12 @@ export class SignalChannel implements ChannelAdapter {
           if (!line.trim()) continue;
           try {
             const msg = JSON.parse(line);
-            this.handleJsonRpc(msg);
+            // Fire-and-forget on purpose (one bad envelope must not stall the
+            // read loop) but an unhandled rejection terminates Bun — always
+            // attach a catch.
+            this.handleJsonRpc(msg).catch((err) =>
+              console.error(`[angel] Signal envelope error: ${err.message}`),
+            );
           } catch {}
         }
       }
@@ -176,6 +209,7 @@ export class SignalChannel implements ChannelAdapter {
       externalChatId: groupId || envelope.sourceNumber || "",
       chatType: groupId ? "signal_group" : "signal_private",
       senderName: sender,
+      senderId: envelope.sourceNumber,
       text: text || (dataMsg.attachments?.length ? "[image]" : ""),
       isGroupMention: !!groupId && isMentioned,
       senderDmId: envelope.sourceNumber || undefined,
@@ -194,15 +228,18 @@ export class SignalChannel implements ChannelAdapter {
         "signal-cli",
         "attachments",
       );
-      const attId = imageAttachment.id || imageAttachment.filename;
-      if (attId) {
-        const attPath = join(attDir, attId);
+      const attPath = safeAttachmentPath(attDir, imageAttachment);
+      if (attPath) {
         console.log(
           `[angel] Signal attachment: ${attPath} exists=${existsSync(attPath)}`,
         );
-        if (existsSync(attPath)) {
-          incoming.imageBase64 = readFileSync(attPath).toString("base64");
-          incoming.imageMimeType = imageAttachment.contentType;
+        try {
+          if (existsSync(attPath)) {
+            incoming.imageBase64 = readFileSync(attPath).toString("base64");
+            incoming.imageMimeType = imageAttachment.contentType;
+          }
+        } catch (err: any) {
+          console.error(`[angel] Signal image read failed: ${err.message}`);
         }
       }
     }
@@ -218,9 +255,8 @@ export class SignalChannel implements ChannelAdapter {
         "signal-cli",
         "attachments",
       );
-      const attId = audioAttachment.id || audioAttachment.filename;
-      if (attId) {
-        const attPath = join(attDir, attId);
+      const attPath = safeAttachmentPath(attDir, audioAttachment);
+      if (attPath) {
         if (existsSync(attPath)) {
           try {
             const client = new OpenAI();
@@ -313,6 +349,7 @@ export class SignalChannel implements ChannelAdapter {
       externalChatId,
       chatType,
       senderName: sender,
+      senderId: sourceNumber,
       text,
       isGroupMention: false,
       senderDmId: sourceNumber || undefined,

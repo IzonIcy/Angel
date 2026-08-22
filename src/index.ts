@@ -14,10 +14,12 @@ import {
   configExists,
   configPath,
   loadConfig,
+  unresolvedEnvVars,
 } from "./config";
 import { startDashboard } from "./dashboard";
 import { getDb, logSystemEvent } from "./db";
 import { runDoctor } from "./doctor";
+import { isClaudeModel } from "./llm";
 import { initMcpServers, shutdownMcpServers } from "./mcp";
 import { createMessageHandler } from "./message_handler";
 import { setupNotifiers } from "./notifiers";
@@ -218,10 +220,40 @@ async function boot() {
 
   p.intro(color.bgCyan(color.black(" angel ")));
 
+  // Last-resort net: a stray async rejection from plugin/hook/MCP code must
+  // not silently terminate an always-on daemon (Bun's default is fatal).
+  process.on("unhandledRejection", (reason) => {
+    console.error(
+      `[angel] unhandled rejection: ${reason instanceof Error ? (reason.stack ?? reason.message) : String(reason)}`,
+    );
+  });
+
   const config = loadConfig();
-  if (!config.openai_api_key) {
+  if (unresolvedEnvVars.size > 0) {
+    p.log.warn(
+      `Unresolved \${ENV_VAR} references in config: ${[...unresolvedEnvVars].join(", ")}. ` +
+        `The affected values are empty strings — check for typos.`,
+    );
+    unresolvedEnvVars.clear();
+  }
+  // Only the credential required by the configured model is fatal. An
+  // Anthropic-only setup should not be blocked for lacking an OpenAI key.
+  const needsOpenAIKey = !isClaudeModel(config.model);
+  const needsAnthropicKey = isClaudeModel(config.model);
+  if (needsOpenAIKey && !config.openai_api_key) {
     p.log.error(`openai_api_key not set. Run ${color.cyan("bun run setup")}.`);
     process.exit(1);
+  }
+  if (needsAnthropicKey && !config.anthropic_api_key) {
+    p.log.error(
+      `anthropic_api_key not set (required for model "${config.model}"). Run ${color.cyan("bun run setup")}.`,
+    );
+    process.exit(1);
+  }
+  if (!needsOpenAIKey && !config.openai_api_key) {
+    p.log.warn(
+      `openai_api_key not set — fine while model "${config.model}" routes via Anthropic.`,
+    );
   }
 
   const db = getDb(config.data_dir);
