@@ -32,6 +32,21 @@ export interface SignalConfig extends ChannelConfig {
   allowed_numbers?: string[];
 }
 
+export interface TelegramConfig extends ChannelConfig {
+  /** Bot token from @BotFather */
+  token?: string;
+}
+
+export interface SecurityConfig {
+  /** Max messages per sender per minute across all channels (0 = unlimited) */
+  max_messages_per_minute?: number;
+}
+
+export interface DashboardConfig {
+  enabled?: boolean;
+  port?: number;
+}
+
 export interface MemoryConfig {
   reflector_enabled: boolean;
   reflector_interval_ms: number;
@@ -101,7 +116,10 @@ export interface AngelConfig {
     discord?: DiscordConfig;
     slack?: SlackConfig;
     signal?: SignalConfig;
+    telegram?: TelegramConfig;
   };
+  security?: SecurityConfig;
+  dashboard?: DashboardConfig;
   memory: MemoryConfig;
   model_routing: ModelRoutingConfig;
   daily_budget: DailyBudgetConfig;
@@ -333,6 +351,37 @@ export function validateConfig(config: unknown): AngelConfig {
     validateChannelConfig(errors, "slack", config.channels.slack);
     validateChannelConfig(errors, "signal", config.channels.signal);
     validateChannelConfig(errors, "imessage", config.channels.imessage);
+    validateChannelConfig(errors, "telegram", config.channels.telegram);
+
+    if (config.security !== undefined) {
+      if (!isPlainObject(config.security)) {
+        errors.push("security must be an object");
+      } else if (
+        config.security.max_messages_per_minute !== undefined &&
+        typeof config.security.max_messages_per_minute !== "number"
+      ) {
+        errors.push("security.max_messages_per_minute must be a number");
+      }
+    }
+
+    if (config.dashboard !== undefined) {
+      if (!isPlainObject(config.dashboard)) {
+        errors.push("dashboard must be an object");
+      } else {
+        if (
+          config.dashboard.enabled !== undefined &&
+          typeof config.dashboard.enabled !== "boolean"
+        ) {
+          errors.push("dashboard.enabled must be a boolean");
+        }
+        if (
+          config.dashboard.port !== undefined &&
+          typeof config.dashboard.port !== "number"
+        ) {
+          errors.push("dashboard.port must be a number");
+        }
+      }
+    }
 
     const discord = config.channels.discord;
     if (

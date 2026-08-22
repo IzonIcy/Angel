@@ -11,6 +11,7 @@ import { handleCommand } from "./commands";
 import type { AngelConfig } from "./config";
 import { storeMessage, upsertChat } from "./db";
 import { handleExplicitMemory, scheduleReflector } from "./memory";
+import { SenderRateLimiter } from "./security";
 import type { ToolRegistry } from "./tools/registry";
 
 export interface MessageHandlerDeps {
@@ -57,6 +58,11 @@ function isOnboardingChat(db: Database, chatId: number): boolean {
 export function createMessageHandler(deps: MessageHandlerDeps): MessageHandler {
   const { db, config, registry, channels, onRestart } = deps;
   const activeChats: Map<number, AbortController> = new Map();
+  const rateLimiter = new SenderRateLimiter(
+    config.security?.max_messages_per_minute ?? 0,
+  );
+  // Prune expired windows periodically so the map stays small.
+  setInterval(() => rateLimiter.prune(), 120_000).unref();
 
   const send = (
     adapter: ChannelAdapter | undefined,
@@ -67,6 +73,14 @@ export function createMessageHandler(deps: MessageHandlerDeps): MessageHandler {
   return async (msg: IncomingMessage): Promise<void> => {
     const channelKey = msg.chatType.split("_")[0];
     const adapter = channels.get(channelKey);
+
+    const verdict = rateLimiter.check(channelKey, msg.senderName);
+    if (!verdict.allowed) {
+      console.warn(
+        `[angel] rate limit hit for ${channelKey}:${msg.senderName} (retry in ${verdict.retryAfterSeconds}s)`,
+      );
+      return;
+    }
 
     const channelConfig = (
       config.channels as Record<

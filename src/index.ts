@@ -7,6 +7,7 @@ import { DiscordChannel } from "./channels/discord";
 import { iMessageChannel } from "./channels/imessage";
 import { SignalChannel } from "./channels/signal";
 import { SlackChannel } from "./channels/slack";
+import { TelegramChannel } from "./channels/telegram";
 import { ChannelRegistry } from "./channels/types";
 import {
   type ChannelConfig,
@@ -14,6 +15,7 @@ import {
   configPath,
   loadConfig,
 } from "./config";
+import { startDashboard } from "./dashboard";
 import { getDb, logSystemEvent } from "./db";
 import { runDoctor } from "./doctor";
 import { initMcpServers, shutdownMcpServers } from "./mcp";
@@ -296,6 +298,9 @@ async function boot() {
       ),
     );
   }
+  if (config.channels.telegram?.enabled && config.channels.telegram.token) {
+    channels.register(new TelegramChannel(config.channels.telegram.token));
+  }
 
   const messageHandler = createMessageHandler({
     db,
@@ -314,6 +319,10 @@ async function boot() {
       health.lastError || health.status,
       health.name,
     );
+  }
+
+  if (config.dashboard?.enabled) {
+    startDashboard({ config, db, startedAt: Date.now() });
   }
 
   setupNotifiers({ db, config, registry, channels });
