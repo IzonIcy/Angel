@@ -32,11 +32,17 @@ export function scrubSecrets(text: string): string {
 }
 
 /**
- * Env keys that must not reach spawned shells. Matched case-insensitively
- * against credential-bearing name shapes (API keys, tokens, secrets,
- * passwords, credentials).
+ * Env keys that must not reach spawned shells. Two shapes match:
+ *  - suffix: credential-bearing name endings (API keys, tokens, secrets,
+ *    passwords, credentials, DSNs)
+ *  - prefix: whole cloud-credential namespaces (AWS_*, GCP_*, AZURE_*),
+ *    which include non-obvious names like AWS_ACCESS_KEY_ID
+ *
+ * Erring toward stripping here is cheap: spawned shells rarely need cloud
+ * config vars, but one leaked key in LLM context is unrecoverable.
  */
-const ENV_SECRET_KEY = /(API_?KEY|TOKEN|SECRET|PASSWORD|PASSWD|CREDENTIALS?)$/i;
+const ENV_SECRET_KEY =
+  /(API_?KEY|TOKEN|SECRET|PASSWORD|PASSWD|CREDENTIALS?|DSN)$|^(AWS_|GCP_|AZURE_|GOOGLE_APPLICATION)/i;
 
 /**
  * Returns a copy of `process.env` with credential-bearing variables removed.

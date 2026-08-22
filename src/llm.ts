@@ -92,6 +92,12 @@ function getAnthropicClient(config: AngelConfig): Anthropic {
   );
 }
 
+/** Whether Rose/Claude OAuth credentials exist in the keychain. Cheap
+ *  keychain probe — safe to call at boot before any client is built. */
+export function hasRoseOAuthCredentials(): boolean {
+  return loadRoseOAuthToken() !== null;
+}
+
 function loadRoseOAuthToken(): string | null {
   try {
     const result = Bun.spawnSync(

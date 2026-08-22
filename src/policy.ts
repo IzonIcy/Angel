@@ -134,16 +134,27 @@ export function evaluateExecutionPolicy(
     };
   }
 
-  // No rule matched. Unconfigured must not mean "allow everything": high-risk
-  // tools fall back to requiring confirmation so a misconfigured or empty
-  // ruleset fails safe instead of fail-open.
-  if (tool.risk === "high") {
+  // No rule matched. Unconfigured must not mean "allow everything" in
+  // multi-party chats: high-risk tools fall back to requiring confirmation
+  // there, so an empty ruleset fails safe instead of fail-open.
+  //
+  // Direct chats (owner DMs) keep the historical allow behavior — that is
+  // where the safe-word flow itself resolves (approve_confirmation is
+  // high-risk); failing closed here would brick confirmations entirely.
+  if (tool.risk === "high" && !isDirectChat(ctx.channel)) {
     return {
       allowed: false,
       requireConfirmation: true,
-      reason: "No matching execution policy for a high-risk tool",
+      reason:
+        "No matching execution policy for a high-risk tool outside a direct chat",
     };
   }
 
   return { allowed: true, requireConfirmation: false };
+}
+
+/** True when the channel key refers to a 1:1 conversation
+ *  (discord_dm, signal_private, imessage_private, telegram_private, …). */
+export function isDirectChat(channel: string | undefined): boolean {
+  return typeof channel === "string" && /_(dm|private)$/.test(channel);
 }

@@ -1,4 +1,12 @@
+import { timingSafeEqual } from "crypto";
 import type { AngelConfig } from "./config";
+
+/** Length-safe constant-time string comparison for bearer tokens. */
+function tokenMatches(provided: string, required: string): boolean {
+  const a = Buffer.from(provided);
+  const b = Buffer.from(required);
+  return a.length === b.length && timingSafeEqual(a, b);
+}
 
 type DashboardDb = {
   query: (sql: string, ...params: unknown[]) => unknown;
@@ -109,8 +117,9 @@ export function startDashboard(deps: DashboardDeps): {
 
       const requiredToken = deps.config.dashboard?.token;
       if (requiredToken) {
-        const auth = request.headers.get("authorization");
-        if (auth !== `Bearer ${requiredToken}`) {
+        const auth = request.headers.get("authorization") ?? "";
+        const provided = auth.startsWith("Bearer ") ? auth.slice(7) : "";
+        if (!provided || !tokenMatches(provided, requiredToken)) {
           return new Response("unauthorized", { status: 401 });
         }
       }

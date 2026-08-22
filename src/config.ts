@@ -539,7 +539,10 @@ export function saveConfig(config: Partial<AngelConfig>): void {
   }
   const yaml = stringifyYaml(config);
   // 0600: the config carries channel tokens and API keys in plaintext.
-  require("fs").writeFileSync(path, yaml, { encoding: "utf-8", mode: 0o600 });
+  // writeFileSync's mode only applies at creation, so chmod explicitly —
+  // pre-existing files may be group/world-readable from older versions.
+  require("fs").writeFileSync(path, yaml, "utf-8");
+  require("fs").chmodSync(path, 0o600);
 }
 
 function deepMerge(target: any, source: any): any {

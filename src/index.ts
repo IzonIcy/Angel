@@ -19,7 +19,7 @@ import {
 import { startDashboard } from "./dashboard";
 import { getDb, logSystemEvent } from "./db";
 import { runDoctor } from "./doctor";
-import { isClaudeModel } from "./llm";
+import { hasRoseOAuthCredentials, isClaudeModel } from "./llm";
 import { initMcpServers, shutdownMcpServers } from "./mcp";
 import { createMessageHandler } from "./message_handler";
 import { setupNotifiers } from "./notifiers";
@@ -237,16 +237,21 @@ async function boot() {
     unresolvedEnvVars.clear();
   }
   // Only the credential required by the configured model is fatal. An
-  // Anthropic-only setup should not be blocked for lacking an OpenAI key.
+  // Anthropic-only setup should not be blocked for lacking an OpenAI key,
+  // and Claude models can authenticate via Rose OAuth instead of an API key.
   const needsOpenAIKey = !isClaudeModel(config.model);
   const needsAnthropicKey = isClaudeModel(config.model);
   if (needsOpenAIKey && !config.openai_api_key) {
     p.log.error(`openai_api_key not set. Run ${color.cyan("bun run setup")}.`);
     process.exit(1);
   }
-  if (needsAnthropicKey && !config.anthropic_api_key) {
+  if (
+    needsAnthropicKey &&
+    !config.anthropic_api_key &&
+    !hasRoseOAuthCredentials()
+  ) {
     p.log.error(
-      `anthropic_api_key not set (required for model "${config.model}"). Run ${color.cyan("bun run setup")}.`,
+      `anthropic_api_key not set (required for model "${config.model}") and no Rose OAuth credentials found. Run ${color.cyan("bun run setup")}.`,
     );
     process.exit(1);
   }
