@@ -1,5 +1,6 @@
 import { sanitizedEnv, scrubSecrets } from "../secrets";
 import type { Tool, ToolContext, ToolResult } from "./registry";
+import { resolveSandboxMode, wrapWithSandbox } from "./sandbox";
 
 // Tripwire list of obviously destructive commands. This is NOT a security
 // boundary: regexes on a shell string are trivially bypassed (quoting tricks
@@ -108,7 +109,14 @@ export const bashTool: Tool = {
     }
 
     try {
-      const proc = Bun.spawn(["bash", "-c", input.command], {
+      // OS-level sandbox (Seatbelt on macOS). This is the real boundary —
+      // BLOCKED_HARD above is only a tripwire. Mode resolves from
+      // config.security.sandbox; defaults to filesystem-restricted where
+      // the mechanism exists.
+      const mode = resolveSandboxMode(ctx.config.security?.sandbox);
+      const argv = wrapWithSandbox(input.command, ctx.workingDir, mode);
+
+      const proc = Bun.spawn(argv, {
         cwd: ctx.workingDir,
         stdout: "pipe",
         stderr: "pipe",

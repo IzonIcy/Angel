@@ -40,6 +40,15 @@ export interface TelegramConfig extends ChannelConfig {
 export interface SecurityConfig {
   /** Max messages per sender per minute across all channels (0 = unlimited) */
   max_messages_per_minute?: number;
+  /**
+   * OS sandbox for the bash tool (Seatbelt on macOS):
+   *  - "filesystem": shell writes restricted to working dir + temp (default
+   *    on macOS, where the mechanism exists)
+   *  - "full": filesystem restrictions AND network denied
+   *  - "off": no sandbox — every bash command runs with full user privileges
+   * Non-macOS platforms have no implementation yet and stay unsandboxed.
+   */
+  sandbox?: "off" | "filesystem" | "full";
 }
 
 export interface DashboardConfig {
@@ -366,6 +375,13 @@ export function validateConfig(config: unknown): AngelConfig {
         typeof config.security.max_messages_per_minute !== "number"
       ) {
         errors.push("security.max_messages_per_minute must be a number");
+      } else if (
+        config.security.sandbox !== undefined &&
+        !["off", "filesystem", "full"].includes(String(config.security.sandbox))
+      ) {
+        errors.push(
+          'security.sandbox must be one of "off", "filesystem", or "full"',
+        );
       }
     }
 

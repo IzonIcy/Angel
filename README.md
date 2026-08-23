@@ -267,12 +267,16 @@ src/
 
 ## Security
 
+- **OS sandbox (macOS)**: bash commands run inside a Seatbelt profile that denies filesystem writes outside the working directory and temp space. Set `security.sandbox: "full"` to also deny all network access from shells, or `"off"` to disable. This is the real enforcement boundary; the blocked-pattern list below is tripwire telemetry and is bypassable by design of shell syntax.
 - **Command guardrails**: 46 blocked patterns covering destructive operations, credential theft, data exfiltration, privilege escalation, and system tampering
+- **Policy engine**: deny / allow / require-confirmation rules scoped by tool, risk level, channel, user, path, and domain — high-risk tools outside direct chats fail safe when no rule matches
 - **Secret scrubbing**: OpenAI keys, Slack tokens, GitHub tokens, SSH/RSA/EC private keys automatically redacted from command output
+- **Env sanitization**: credential-bearing environment variables are stripped before spawning shells so they can't leak into LLM context
 - **File access control**: Sensitive paths (`.ssh`, `.aws`, `.gnupg`, `.env`, credentials, angel config) blocked from file tools
-- **SSRF protection**: `web_fetch` blocks requests to private/internal IP ranges
+- **SSRF protection**: `web_fetch` resolves hostnames itself and blocks requests landing on private/internal IP ranges, re-validating every redirect hop
 - **Safe-word system**: Configurable phrase required for dangerous operations, verified via DM
 - **Per-channel access control**: User allowlists managed via config and runtime tools
+- **Rate limiting**: per-sender message limits shared by all channels
 
 ## Development
 

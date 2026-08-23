@@ -74,6 +74,15 @@ proactive:
 #   hostname: "127.0.0.1"
 #   token: "share-with-metrics-scraper-only"
 
+# security:
+#   max_messages_per_minute: 30
+#   # OS sandbox for bash commands (Seatbelt on macOS).
+#   #   filesystem — shell writes restricted to working dir + temp (default
+#   #     on macOS; the only mode that keeps ordinary tooling fully working)
+#   #   full       — filesystem restrictions AND all network denied
+#   #   off        — no sandbox; commands run with full user privileges
+#   sandbox: "full"
+
 # mcp_servers:
 #   filesystem:
 #     command: "npx"
