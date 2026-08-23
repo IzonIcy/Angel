@@ -97,6 +97,11 @@ export function evaluateExecutionPolicy(
   input: any,
   ctx: ToolContext,
 ): PolicyDecision {
+  // Rules are evaluated newest-first (ORDER BY id DESC) and the FIRST match
+  // decides: deny wins immediately, allow wins immediately. That means a
+  // newer `allow` rule intentionally shadows an older matching `deny` —
+  // precedence is recency, not severity. Keep deny rules newer than the
+  // allows they should override, or scope them more narrowly.
   const rows = ctx.db
     .query(
       `SELECT id, name, type, action, tool_name, risk_level, channel, actor_id, path_pattern, domain_pattern, note

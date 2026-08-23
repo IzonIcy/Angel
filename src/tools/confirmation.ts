@@ -1,4 +1,9 @@
-import type { Tool, ToolContext, ToolResult } from "./registry";
+import {
+  createPolicyBypass,
+  type Tool,
+  type ToolContext,
+  type ToolResult,
+} from "./registry";
 
 export const requestConfirmationTool: Tool = {
   name: "request_confirmation",
@@ -155,7 +160,7 @@ export const approveConfirmationTool: Tool = {
       db: ctx.db,
       config: ctx.config,
       registry: ctx.registry,
-      skipPolicy: true,
+      skipPolicy: createPolicyBypass(),
     };
 
     const result = await ctx.registry!.execute(

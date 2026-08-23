@@ -51,7 +51,11 @@ import { emitMessageTool } from "./tools/emit_message";
 import { fileTools } from "./tools/files";
 import { memoryTools } from "./tools/memory";
 import { miscTools } from "./tools/misc";
-import { type ToolContext, ToolRegistry } from "./tools/registry";
+import {
+  createPolicyBypass,
+  type ToolContext,
+  ToolRegistry,
+} from "./tools/registry";
 import { remoteTools } from "./tools/remote";
 import { scheduleTools } from "./tools/schedule";
 import { sendMessageTool, setSendMessageDeps } from "./tools/send_message";
@@ -183,7 +187,7 @@ switch (command) {
       workingDir: process.cwd(),
       db,
       config,
-      skipPolicy: true,
+      skipPolicy: createPolicyBypass(),
     };
     p.intro(color.bgCyan(color.black(" angel agents ")));
     const result = await listCodingAgentsTool.execute({}, ctx);

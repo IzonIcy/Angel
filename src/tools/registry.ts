@@ -4,6 +4,23 @@ import { logToolExecution } from "../db";
 import type { LlmTool } from "../llm";
 import { evaluateExecutionPolicy, type PolicyDecision } from "../policy";
 
+/**
+ * Capability token for contexts that bypass the execution policy engine.
+ *
+ * This used to be a plain boolean on ToolContext, which meant any call site
+ * could set `{ skipPolicy: true }` and silently skip every deny/confirm
+ * rule. Now the only way to obtain one is `createPolicyBypass()` below —
+ * the brand symbol is module-private, so nothing outside this file can
+ * construct a valid bypass.
+ */
+const bypassBrand = Symbol("angel.policyBypass");
+export type PolicyBypass = { readonly [bypassBrand]: true };
+
+/** The only sanctioned producer of a policy bypass. Keep callers few. */
+export function createPolicyBypass(): PolicyBypass {
+  return { [bypassBrand]: true } as unknown as PolicyBypass;
+}
+
 export interface ToolContext {
   chatId: number;
   channel: string;
@@ -13,7 +30,11 @@ export interface ToolContext {
   actorId?: string;
   registry?: ToolRegistry;
   sendIntermediate?: (text: string) => Promise<void>;
-  skipPolicy?: boolean;
+  /**
+   * Privileged contexts only — see {@link createPolicyBypass}. When set,
+   * the execution-policy engine is skipped entirely for this context.
+   */
+  skipPolicy?: PolicyBypass;
 }
 
 export interface ToolResult {

@@ -5,7 +5,12 @@ import { join } from "path";
 import { DEFAULTS } from "../config";
 import { getDb, upsertChat } from "../db";
 import { createGoalProjectTool, goalNextActionsTool } from "./advanced";
-import { type Tool, type ToolContext, ToolRegistry } from "./registry";
+import {
+  createPolicyBypass,
+  type Tool,
+  type ToolContext,
+  ToolRegistry,
+} from "./registry";
 
 let ctx: ToolContext;
 
@@ -75,7 +80,7 @@ describe("execution policies", () => {
       {},
       {
         ...ctx,
-        skipPolicy: true,
+        skipPolicy: createPolicyBypass(),
       },
     );
     expect(approved.isError).toBeFalsy();

