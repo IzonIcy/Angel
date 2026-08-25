@@ -31,7 +31,7 @@ export function sandboxExecAvailable(): boolean {
 
 /** Resolve the effective mode: explicit config wins, otherwise a safe
  *  platform-dependent default. Unknown config values fail closed to "off"
- *  only after warning — silently upgrading callers to stricter-than-asked
+ *  only after warning; silently upgrading callers to stricter-than-asked
  *  modes would break their workflows. */
 export function resolveSandboxMode(
   configured: string | undefined,

@@ -132,7 +132,7 @@ describe("bash tool executes inside the sandbox (integration)", () => {
     "writes outside allowed paths are denied by the kernel",
     async () => {
       const workDir = mkdtempSync(path.join(os.tmpdir(), "angel-sbx-"));
-      // $HOME is not in the allow list — the write must be denied.
+      // $HOME is not in the allow list; the write must be denied.
       const result = await bashTool.execute(
         {
           command: `touch "$HOME/angel-sandbox-should-not-exist" 2>&1; exit 0`,

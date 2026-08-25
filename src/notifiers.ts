@@ -58,7 +58,6 @@ export function setupNotifiers(deps: NotifierDeps): void {
     }
   });
 
-  // Send progress updates for long-running coding agents
   setCodingAgentProgressNotifier(
     async (agent: RunningAgent, progressMessage: string) => {
       const adapter = channels.get(agent.channel);

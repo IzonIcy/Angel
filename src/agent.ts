@@ -43,7 +43,7 @@ export async function processMessage(
 ): Promise<string | typeof INTERRUPTED> {
   // All entry points (message handler, scheduler, notifiers, subagents) route
   // through here, and all of them load/mutate/save the same per-chat session
-  // row — so concurrent runs on one chatId must serialize.
+  // row; so concurrent runs on one chatId must serialize.
   return withChatLock(opts.chatId, () =>
     processMessageUnlocked(userMessage, opts, image),
   );

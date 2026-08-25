@@ -144,7 +144,7 @@ export const spawnBackgroundProcessTool: Tool = {
       externalChatId,
       name: input.name,
       outputBuffer: [],
-      maxOutputLines: 1000, // Keep last 1000 lines in memory
+      maxOutputLines: 1000,
     };
     runningProcesses.set(id, entry);
 
@@ -174,7 +174,6 @@ export const spawnBackgroundProcessTool: Tool = {
             if (done) break;
             const text = decoder.decode(value, { stream: true });
             entry.stdout += text;
-            // Add to circular buffer
             const lines = text.split("\n");
             for (const line of lines) {
               if (line) {
@@ -347,12 +346,10 @@ export const listBackgroundProcessesTool: Tool = {
 
     let processes = [...runningProcesses.values()];
 
-    // Filter by chat unless all_chats requested
     if (!input.all_chats) {
       processes = processes.filter((p) => p.chatId === ctx.chatId);
     }
 
-    // Filter out stopped if requested
     if (!includeStopped) {
       processes = processes.filter((p) => p.status === "running");
     }
@@ -637,7 +634,6 @@ export function restoreBackgroundProcesses(): number {
 
   let restored = 0;
   for (const p of persisted) {
-    // Check if PID is still running
     try {
       process.kill(p.pid, 0); // Signal 0 just checks if process exists
     } catch {
@@ -672,7 +668,6 @@ export function restoreBackgroundProcesses(): number {
     runningProcesses.set(p.id, entry);
     restored++;
 
-    // Monitor the PID for completion
     monitorPid(p.pid, entry);
   }
 
@@ -702,11 +697,9 @@ function monitorPid(pid: number, entry: BackgroundProcess) {
     }
   };
 
-  // Start monitoring
   setTimeout(check, 1000);
 }
 
-// Get count of running processes
 export function getRunningProcessCount(): number {
   let count = 0;
   for (const entry of runningProcesses.values()) {

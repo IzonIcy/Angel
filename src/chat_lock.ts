@@ -1,7 +1,7 @@
 /**
  * Per-chat serialization for processMessage.
  *
- * processMessage is invoked from four entry points — the message handler
+ * processMessage is invoked from four entry points: the message handler
  * (user messages), the scheduler (cron tasks), the notifiers (coding-agent
  * completions), and the subagent tool. All of them load, mutate, and save the
  * same per-chat session row, so concurrent runs on one chatId were corrupting

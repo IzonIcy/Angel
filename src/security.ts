@@ -39,7 +39,7 @@ export class SenderRateLimiter {
     const entry = this.counts.get(key);
 
     // Public channels see one unique sender key per participant, and keys
-    // were never evicted — an unbounded memory leak. Prune expired windows
+    // were never evicted; an unbounded memory leak. Prune expired windows
     // once the map grows past a bound instead of relying on callers to
     // remember to schedule prune().
     if (this.counts.size >= MAX_TRACKED_SENDERS) {

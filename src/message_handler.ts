@@ -102,7 +102,7 @@ export function createMessageHandler(deps: MessageHandlerDeps): MessageHandler {
       // Log both keys so operators migrating name-based entries to platform
       // ids can see exactly why a sender was rejected.
       console.warn(
-        `[angel] rejected sender ${channelKey}:${msg.senderName} (id=${msg.senderId ?? "none"}) — not in allowlist`,
+        `[angel] rejected sender ${channelKey}:${msg.senderName} (id=${msg.senderId ?? "none"}); not in allowlist`,
       );
       return;
     }

@@ -269,7 +269,6 @@ async function boot() {
   const registry = new ToolRegistry();
   const channels = new ChannelRegistry();
 
-  // Set up coding agent + background process persistence directories
   setCodingAgentDataDir(config.data_dir);
   setBackgroundProcessDataDir(config.data_dir);
 
@@ -368,7 +367,6 @@ async function boot() {
 
   setupNotifiers({ db, config, registry, channels });
 
-  // Restore any coding agents that were running before restart
   const restoredAgents = restoreRunningAgents();
   if (restoredAgents > 0) {
     p.log.info(
@@ -376,7 +374,6 @@ async function boot() {
     );
   }
 
-  // Restore any background processes that were running before restart
   const restoredProcesses = restoreBackgroundProcesses();
   if (restoredProcesses > 0) {
     p.log.info(

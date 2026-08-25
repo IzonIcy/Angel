@@ -10,7 +10,6 @@ import {
 } from "./background_processes";
 import type { ToolContext } from "./registry";
 
-// Mock context for testing
 function createMockContext(overrides?: Partial<ToolContext>): ToolContext {
   return {
     chatId: 1,

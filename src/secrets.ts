@@ -48,7 +48,7 @@ const ENV_SECRET_KEY =
  * Returns a copy of `process.env` with credential-bearing variables removed.
  *
  * Spawning shells with a full `{ ...process.env }` hands every channel token
- * and model API key to whatever command runs — `echo $ANTHROPIC_API_KEY` then
+ * and model API key to whatever command runs; `echo $ANTHROPIC_API_KEY` then
  * flows straight into LLM context. Benign variables pass through unchanged.
  */
 export function sanitizedEnv(): Record<string, string> {

@@ -33,7 +33,7 @@ export const browserTool: Tool = {
   }): Promise<ToolResult> {
     // Validate before the headless browser (or the fetch fallback) ever
     // touches the URL. Playwright navigation follows redirects internally,
-    // so we can't re-check every hop — but the initial target is the one the
+    // so we can't re-check every hop; but the initial target is the one the
     // prompt controls, and the fetchFallback path below is fully guarded.
     try {
       await assertSafeUrl(input.url);

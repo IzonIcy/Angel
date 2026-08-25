@@ -1,7 +1,7 @@
 import type { ChannelAdapter, IncomingMessage, MessageHandler } from "./types";
 
 /**
- * Telegram Bot API channel — plain HTTPS long polling, no SDK needed.
+ * Telegram Bot API channel: plain HTTPS long polling, no SDK needed.
  *
  * Requires a bot token from @BotFather. Set `enabled: true` and `token` in
  * the `telegram` section of angel.config.yaml.
@@ -116,7 +116,7 @@ export class TelegramChannel implements ChannelAdapter {
 }
 
 type TgUser = {
-  /** Stable numeric user id from the Bot API — the only non-spoofable identity. */
+  /** Stable numeric user id from the Bot API; the only non-spoofable identity. */
   id?: number;
   username?: string;
   first_name?: string;

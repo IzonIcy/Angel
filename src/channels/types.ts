@@ -5,7 +5,7 @@ export interface IncomingMessage {
   /**
    * Platform-stable sender identity (Discord/Telegram user id, Slack user id,
    * Signal phone number, iMessage handle). Allowlists and rate limits MUST
-   * key on this — display names are user-mutable and therefore spoofable.
+   * key on this; display names are user-mutable and therefore spoofable.
    */
   senderId?: string;
   text: string;
@@ -111,10 +111,7 @@ export class ChannelRegistry {
   }
 }
 
-/**
- * Split a message into chunks based on maximum length.
- * Used internally when a single message exceeds channel limits.
- */
+/** Split a message into chunks based on maximum length. */
 export function splitMessage(text: string, maxLen: number): string[] {
   if (text.length <= maxLen) return [text];
 
@@ -139,45 +136,29 @@ export function splitMessage(text: string, maxLen: number): string[] {
 }
 
 /**
- * Delimiter for intentional message splits.
- * Angel can include this in a response to send multiple sequential messages.
- * Must appear on its own line to be recognized as a delimiter.
+ * Delimiter Angel can include in a response to send multiple sequential
+ * messages. Must appear on its own line to be recognized as a delimiter.
  */
 export const MESSAGE_SEPARATOR = "---MSG---";
 
-/**
- * Pattern that matches MESSAGE_SEPARATOR only when it appears on its own line.
- * This prevents accidental splits when the separator is mentioned in prose.
- */
+/** Matches MESSAGE_SEPARATOR only when on its own line, so prose mentions don't trigger splits. */
 const MESSAGE_SEPARATOR_PATTERN = /(?:^|\n)\s*---MSG---\s*(?:\n|$)/;
 
 /**
- * Split a response into multiple messages for sending.
- *
- * First splits on intentional MESSAGE_SEPARATOR delimiters (allowing Angel
- * to segment responses naturally), then applies length-based splitting to
- * any segments that exceed maxLen.
- *
- * The separator must appear on its own line to be recognized. Inline mentions
- * of the separator (e.g., explaining its use) will not cause a split.
- *
- * @param text The response text to split
- * @param maxLen Maximum message length for the channel
- * @returns Array of message strings to send sequentially
+ * Split a response into multiple messages for sending: first on intentional
+ * MESSAGE_SEPARATOR delimiters (own line only), then length-based splitting
+ * on any segment exceeding maxLen.
  */
 export function splitResponse(text: string, maxLen: number): string[] {
-  // First split on intentional message separators (only when on own line)
   const segments = text
     .split(MESSAGE_SEPARATOR_PATTERN)
     .map((s) => s.trim())
     .filter(Boolean);
 
-  // If no separators found (or only one segment), fall back to length-based splitting
   if (segments.length <= 1) {
     return splitMessage(text, maxLen);
   }
 
-  // Apply length-based splitting to each segment
   const chunks: string[] = [];
   for (const segment of segments) {
     chunks.push(...splitMessage(segment, maxLen));

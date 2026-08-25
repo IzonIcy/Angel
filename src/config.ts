@@ -45,7 +45,7 @@ export interface SecurityConfig {
    *  - "filesystem": shell writes restricted to working dir + temp (default
    *    on macOS, where the mechanism exists)
    *  - "full": filesystem restrictions AND network denied
-   *  - "off": no sandbox — every bash command runs with full user privileges
+   *  - "off": no sandbox, every bash command runs with full user privileges
    * Non-macOS platforms have no implementation yet and stay unsandboxed.
    */
   sandbox?: "off" | "filesystem" | "full";
@@ -54,7 +54,7 @@ export interface SecurityConfig {
 export interface DashboardConfig {
   enabled?: boolean;
   port?: number;
-  /** Bind address. Defaults to loopback — binding a non-loopback interface
+  /** Bind address. Defaults to loopback; binding a non-loopback interface
    * exposes an unauthenticated status/metrics endpoint to the network. */
   hostname?: string;
   /** When set, requests must send `Authorization: Bearer <token>`. */
@@ -555,7 +555,7 @@ export function saveConfig(config: Partial<AngelConfig>): void {
   }
   const yaml = stringifyYaml(config);
   // 0600: the config carries channel tokens and API keys in plaintext.
-  // writeFileSync's mode only applies at creation, so chmod explicitly —
+  // writeFileSync's mode only applies at creation, so chmod explicitly;
   // pre-existing files may be group/world-readable from older versions.
   require("fs").writeFileSync(path, yaml, "utf-8");
   require("fs").chmodSync(path, 0o600);

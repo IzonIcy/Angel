@@ -254,7 +254,7 @@ function migrationV1(db: Database) {
 }
 
 function migrationV2(_db: Database) {
-  // Tables already created in migrationV1 — this was a no-op duplicate.
+  // Tables already created in migrationV1; this was a no-op duplicate.
   // Kept as empty migration to preserve schema_version numbering.
 }
 

@@ -99,7 +99,7 @@ export function evaluateExecutionPolicy(
 ): PolicyDecision {
   // Rules are evaluated newest-first (ORDER BY id DESC) and the FIRST match
   // decides: deny wins immediately, allow wins immediately. That means a
-  // newer `allow` rule intentionally shadows an older matching `deny` —
+  // newer `allow` rule intentionally shadows an older matching `deny`;
   // precedence is recency, not severity. Keep deny rules newer than the
   // allows they should override, or scope them more narrowly.
   const rows = ctx.db
@@ -143,7 +143,7 @@ export function evaluateExecutionPolicy(
   // multi-party chats: high-risk tools fall back to requiring confirmation
   // there, so an empty ruleset fails safe instead of fail-open.
   //
-  // Direct chats (owner DMs) keep the historical allow behavior — that is
+  // Direct chats (owner DMs) keep the historical allow behavior; that is
   // where the safe-word flow itself resolves (approve_confirmation is
   // high-risk); failing closed here would brick confirmations entirely.
   if (tool.risk === "high" && !isDirectChat(ctx.channel)) {

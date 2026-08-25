@@ -4,13 +4,13 @@ import { isIP } from "node:net";
 /**
  * Shared SSRF guard for every tool that fetches URLs (web_fetch, browser,
  * remote, etc). Previous versions matched the URL string against a handful of
- * regexes — that missed redirect targets, DNS rebinding, alternate IP
+ * regexes: that missed redirect targets, DNS rebinding, alternate IP
  * encodings (127.1, 2130706433, 0x7f000001, octal), IPv4-mapped IPv6, and
  * userinfo tricks.
  *
  * This version resolves the hostname itself and rejects the request if ANY
  * resolved address falls in a private/loopback/link-local/reserved range.
- * Failing to resolve also fails closed — an unresolvable host is not a host
+ * Failing to resolve also fails closed: an unresolvable host is not a host
  * we can vouch for.
  *
  * Limitations (documented, not hidden): exotic IPv6 spellings of private
@@ -46,7 +46,7 @@ function ipv4ToInt(ip: string): number {
   for (const part of parts) {
     if (!/^\d{1,3}$/.test(part)) return -1;
     // Leading zeros mean octal to most URL parsers (0177.0.0.1 == 127.0.0.1).
-    // Never seen a legit decimal IP with them — treat as suspicious.
+    // Never seen a legit decimal IP with them; treat as suspicious.
     if (part.length > 1 && part.startsWith("0")) return -1;
     const octet = Number(part);
     if (octet > 255) return -1;
@@ -164,7 +164,7 @@ export async function assertSafeUrl(url: string): Promise<void> {
 
 /**
  * fetch() with SSRF protection on every hop. Redirects are followed manually
- * so each target URL is re-validated — the classic `public -> 302 -> metadata`
+ * so each target URL is re-validated; the classic `public -> 302 -> metadata`
  * bypass doesn't work here.
  */
 export async function fetchSafe(

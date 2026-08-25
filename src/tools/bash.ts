@@ -109,7 +109,7 @@ export const bashTool: Tool = {
     }
 
     try {
-      // OS-level sandbox (Seatbelt on macOS). This is the real boundary —
+      // OS-level sandbox (Seatbelt on macOS). This is the real boundary:
       // BLOCKED_HARD above is only a tripwire. Mode resolves from
       // config.security.sandbox; defaults to filesystem-restricted where
       // the mechanism exists.

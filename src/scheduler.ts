@@ -42,12 +42,12 @@ async function tick(
   const dueTasks = getScheduledTasksDue(db);
   for (const task of dueTasks) {
     // Atomically claim the task. An overlapping tick that sees the same row
-    // still as 'active' loses the claim and skips it — no more double runs of
+    // still as 'active' loses the claim and skips it; no more double runs of
     // tasks that take longer than the 15s tick.
     if (!claimScheduledTask(db, task.id)) continue;
 
     try {
-      // A task without a chat can't be delivered anywhere — same fate as an
+      // A task without a chat can't be delivered anywhere; same fate as an
       // unknown chat id.
       if (task.chat_id === null) {
         updateTaskStatus(db, task.id, "failed");
@@ -323,7 +323,7 @@ async function tickProactiveRules(
           continue;
         }
 
-        // Optimistic claim against the last_triggered_at we just read —
+        // Optimistic claim against the last_triggered_at we just read;
         // prevents two overlapping ticks from both sending.
         const claimed = db.run(
           "UPDATE proactive_rules SET last_triggered_at = datetime('now') WHERE id = ? AND status = 'active' AND last_triggered_at IS ?",

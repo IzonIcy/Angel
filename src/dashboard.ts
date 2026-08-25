@@ -63,7 +63,7 @@ const HTML_PAGE = `<!doctype html>
 
 /**
  * Read-only HTTP surface: a tiny status page and Prometheus-style metrics.
- * Enabled only when config.dashboard.enabled is true — default off.
+ * Enabled only when config.dashboard.enabled is true; default off.
  */
 export function startDashboard(deps: DashboardDeps): {
   stop: () => Promise<void>;

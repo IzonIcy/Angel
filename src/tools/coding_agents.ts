@@ -47,7 +47,7 @@ const AGENTS: Record<string, AgentDef> = {
         "stream-json",
         "--max-turns",
         "50",
-        // No --dangerously-skip-permissions — same rationale as claude.
+        // No --dangerously-skip-permissions, same rationale as claude.
       ];
       if (opts.model) args.push("--model", opts.model);
       args.push(prompt);
@@ -294,7 +294,6 @@ export const spawnCodingAgentTool: Tool = {
               buffer += decoder.decode(value, { stream: true });
               entry.stdout = buffer;
 
-              // Process complete NDJSON lines
               const lines = buffer.split("\n");
               buffer = lines.pop() || ""; // Keep incomplete line in buffer
 
@@ -304,7 +303,6 @@ export const spawnCodingAgentTool: Tool = {
                   const event = JSON.parse(line);
                   processStreamEvent(entry, event);
 
-                  // Send progress notification if enough time has passed
                   const now = Date.now();
                   if (
                     entry.currentTool &&
@@ -519,7 +517,6 @@ function formatAgentStatus(entry: RunningAgent, tailLen: number): string {
     `Duration: ${elapsed}`,
   ];
 
-  // Show progress info for running agents
   if (entry.status === "running") {
     if (entry.currentTool) {
       lines.push(`Current: Using ${entry.currentTool}`);
@@ -541,7 +538,6 @@ function formatAgentStatus(entry: RunningAgent, tailLen: number): string {
     lines.push(`Exit code: ${entry.exitCode}`);
   }
 
-  // Show metadata for completed agents
   if (entry.status !== "running") {
     if (entry.totalCostUsd) {
       lines.push(`Cost: $${entry.totalCostUsd.toFixed(4)}`);
@@ -677,7 +673,6 @@ function extractSummary(entry: RunningAgent, raw: string): string {
         );
       }
 
-      // Show tools used if any
       const uniqueTools = [...new Set(entry.toolsUsed)];
       if (uniqueTools.length > 0) {
         meta.push(
@@ -813,7 +808,6 @@ export function restoreRunningAgents(): number {
 
   let restored = 0;
   for (const p of persisted) {
-    // Check if PID is still running
     try {
       process.kill(p.pid, 0); // Signal 0 just checks if process exists
     } catch {
@@ -845,7 +839,6 @@ export function restoreRunningAgents(): number {
     runningAgents.set(p.id, entry);
     restored++;
 
-    // Monitor the PID for completion
     monitorPid(p.pid, entry);
   }
 
@@ -874,7 +867,6 @@ function monitorPid(pid: number, entry: RunningAgent) {
     }
   };
 
-  // Start monitoring
   setTimeout(check, 1000);
 }
 

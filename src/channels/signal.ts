@@ -8,7 +8,7 @@ import type { ChannelAdapter, IncomingMessage, MessageHandler } from "./types";
  * Resolves an attachment's on-disk path safely.
  *
  * Prefers signal-cli's opaque attachment id. Falls back to the envelope
- * filename only when it is a bare name — path separators and `..` are
+ * filename only when it is a bare name; path separators and `..` are
  * rejected so a crafted envelope cannot traverse out of the attachments
  * directory. Without this check an authorized sender becomes a local
  * file-read primitive (the file ships base64 into LLM context).
@@ -53,11 +53,7 @@ export class SignalChannel implements ChannelAdapter {
     this.allowedNumbers = new Set(allowedNumbers ?? []);
   }
 
-  /**
-   * Serialize writes to stdin to prevent concurrent JSON-RPC interleaving.
-   * Multiple callers can invoke send methods concurrently; this ensures
-   * each complete message is written atomically before the next begins.
-   */
+  /** Serialize stdin writes so concurrent send methods never interleave JSON-RPC messages. */
   private async serializedWrite(request: object): Promise<void> {
     const doWrite = async () => {
       if (!this.process?.stdin) return;
@@ -65,7 +61,6 @@ export class SignalChannel implements ChannelAdapter {
       this.process.stdin.flush();
     };
 
-    // Chain onto the existing lock to serialize writes
     const previousLock = this.writeLock;
     let resolve: () => void;
     this.writeLock = new Promise((r) => {
@@ -113,7 +108,7 @@ export class SignalChannel implements ChannelAdapter {
           try {
             const msg = JSON.parse(line);
             // Fire-and-forget on purpose (one bad envelope must not stall the
-            // read loop) but an unhandled rejection terminates Bun — always
+            // read loop) but an unhandled rejection terminates Bun; always
             // attach a catch.
             this.handleJsonRpc(msg).catch((err) =>
               console.error(`[angel] Signal envelope error: ${err.message}`),
@@ -311,17 +306,14 @@ export class SignalChannel implements ChannelAdapter {
     const targetAuthor =
       reaction.targetAuthorNumber || reaction.targetAuthor || "someone";
 
-    // Determine if this reaction is on Angel's own message
     const isReactionToSelf = targetAuthor === this.account;
 
-    // Determine the chat context (group or private)
     const groupId =
       envelope.dataMessage?.groupInfo?.groupId ||
       envelope.syncMessage?.sentMessage?.groupInfo?.groupId;
     const externalChatId = groupId || sourceNumber || "";
     const chatType = groupId ? "signal_group" : "signal_private";
 
-    // Build informational text about the reaction
     let text: string;
     if (isRemove) {
       if (isReactionToSelf) {

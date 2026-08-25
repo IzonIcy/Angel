@@ -9,7 +9,7 @@ import { evaluateExecutionPolicy, type PolicyDecision } from "../policy";
  *
  * This used to be a plain boolean on ToolContext, which meant any call site
  * could set `{ skipPolicy: true }` and silently skip every deny/confirm
- * rule. Now the only way to obtain one is `createPolicyBypass()` below —
+ * rule. Now the only way to obtain one is `createPolicyBypass()` below;
  * the brand symbol is module-private, so nothing outside this file can
  * construct a valid bypass.
  */
@@ -31,7 +31,7 @@ export interface ToolContext {
   registry?: ToolRegistry;
   sendIntermediate?: (text: string) => Promise<void>;
   /**
-   * Privileged contexts only — see {@link createPolicyBypass}. When set,
+   * Privileged contexts only; see {@link createPolicyBypass}. When set,
    * the execution-policy engine is skipped entirely for this context.
    */
   skipPolicy?: PolicyBypass;
