@@ -3,74 +3,39 @@
 [![CI](https://github.com/IzonIcy/Angel/actions/workflows/ci.yml/badge.svg)](https://github.com/IzonIcy/Angel/actions/workflows/ci.yml)
     <img src="assets/weeping_angel.png" width="120" />
     <h3>Angel</h3>
-    <p>Autonomous AI agent with multi-channel support, persistent memory, and an extensible tool system</p>
-    <br/>
+    <p>A personal AI agent that lives in your chats and gets things done</p>
     <br/>
 </div>
 
-A self-directed assistant that connects to your communication platforms and gets things done. Angel receives messages from Discord, Slack, iMessage, and Signal, reasons through tasks using LLM-powered tool loops, and maintains long-term memory across conversations.
+I built Angel because I wanted an assistant that shows up where I already am, not another browser tab to check. It connects to Discord, Slack, iMessage, and Signal (plus a basic Telegram adapter), reads your messages, and actually does things: runs shell commands, edits files, searches the web, drives a browser, schedules cron jobs. It also remembers you between conversations, so you don't re-explain yourself every morning.
 
-## Features
+One process, one YAML config file, backed by SQLite. Written in TypeScript on Bun.
 
-- **Multi-Channel**: Connects to Discord, Slack, iMessage, and Signal simultaneously
-- **36+ Built-in Tools**: Shell execution, file operations, web search, browser automation, coding agents, cross-chat messaging, and more
-- **Persistent Memory**: SQLite + file-backed memory with reflection, confidence scoring, duplicate detection, and scoped recall
-- **Scheduled Tasks**: Cron-based and one-shot task scheduling with timezone support, retry logic, and dead-letter handling
-- **Coding Agents**: Spawn external agents (Claude Code, Codex, Aider, Goose, Amp) for background work
-- **Subagents**: Spawn isolated child agents for parallel task execution (max depth 2, max concurrent 4)
-- **Confirmations**: Multi-step safe-word verification for dangerous operations via DM
-- **Goal/Project Mode**: Goal tracking with task graphs, dependency-aware next actions, and checkpoints
-- **Policy Engine**: Approval + permission policies scoped by tool/risk/channel/user/path/domain
-- **Model Routing + Budgets**: Context-based model selection with daily token budget guardrails
-- **Memory Quality Layer**: Aging-aware recall, contradiction grouping, and source-of-truth pinning
-- **Knowledge Connectors**: Connector framework with sync + search across external sources
-- **Workflow Recipes**: Reusable multi-step automations that execute tool sequences
-- **Observability Dashboard**: Runtime metrics for usage, tool errors, tasks, and confirmations
-- **Self-Healing Jobs**: Scheduled task fallback prompts after retry exhaustion
-- **Proactive Mode**: Cron/inactivity rules for agent-initiated messages
-- **Message Compaction**: Automatic conversation summarization when context grows large
-- **Onboarding**: Guided new-user flow with profile and preference gathering
-- **MCP Integration**: Dynamically load tools from Model Context Protocol servers
-- **Hooks, Plugins, Skills**: Event interception, manifest-based plugins, and skill files for extensibility
-- **Access Control**: Per-channel user allowlists with runtime management
-- **Security**: 46 blocked command patterns, secret scrubbing, file access control, SSRF protection, and safe-word gating
+## What it does
 
-## Install
+**Real work, not small talk.** The model gets tools: sandboxed shell execution, file operations, web search and fetch, Playwright browser automation, cross-chat messaging, scheduling. For bigger jobs it can spawn coding agents like Claude Code or Codex in the background, plus small subagents for parallel tasks.
+
+**Memory that persists.** A reflection pass summarizes conversations into SQLite-backed memories. Old memories fade unless they keep being useful, contradictions get grouped so Angel doesn't act on stale info, and facts you care about can be pinned.
+
+**Runs on its own.** Cron-style scheduled tasks with timezones and retries. You can set rules like "ping me if we haven't talked in 12 hours". Long conversations get compacted automatically instead of blowing the context window.
+
+**Guardrails.** Shell commands run inside an OS sandbox on macOS. Dangerous operations need a confirmation code sent via DM. Per-channel allowlists control who can talk to it, secrets get scrubbed from tool output before the model sees them, and outbound fetches are blocked from reaching private/internal IPs.
+
+## Getting started
 
 ```bash
 git clone https://github.com/IzonIcy/Angel.git
 cd angel
 bun install
+bun run setup    # wizard: API key, model, timezone, channel preferences
+
+bun run start    # run the daemon
+bun run dev      # same, with file watching
+bun run doctor   # connectivity diagnostics
+bun run smoke    # credentialed read-only checks of everything configured
 ```
 
-## Setup
-
-```bash
-bun run setup
-```
-
-The setup wizard will walk through API key configuration, channel setup, and initial preferences. Configuration file is stored at `~/.angel/config`.
-
-## Usage
-
-```bash
-bun run start
-
-bun run dev    # file watching (development)
-
-bun run doctor # diagnostics
-
-bun run smoke  # credentialed read-only integration smoke checks
-```
-
-Channel adapters connect automatically based on your configuration. Talk to Angel through any enabled channel.
-
-`bun run smoke` performs safe, credentialed checks for configured LLM providers, Discord, Slack, iMessage, Signal, and active GitHub/Notion/Google Drive knowledge connectors. Missing optional integrations are reported as skipped; configured integrations fail the smoke run if credentials or read-only connectivity are broken.
-
-### Chat Commands
-
-`/help` · `/new` · `/model [name]` · `/memory` · `/usage` · `/dashboard` · `/settings` · `/clear` · `/reset` · `/version`
-
+Config ends up at `~/.angel/config`. Then talk to Angel through any enabled channel. In-chat commands: `/help` `/new` `/model [name]` `/memory` `/usage` `/dashboard` `/settings` `/clear` `/reset` `/restart` `/version`. `bun run smoke` checks your LLM providers, channels, and knowledge connectors (GitHub, Notion, Google Drive), skipping anything not set up and failing loudly on anything broken.
 
 ## Channels
 
@@ -78,7 +43,7 @@ Channel adapters connect automatically based on your configuration. Talk to Ange
 
 1. Create a bot at [discord.com/developers](https://discord.com/developers/applications)
 2. Enable the Message Content intent
-3. Generate a bot token and add it to your config
+3. Generate a token and add it to your config
 
 ```yaml
 channels:
@@ -89,11 +54,10 @@ channels:
 
 ### Slack
 
-1. Go to [api.slack.com/apps](https://api.slack.com/apps) and create a new app **from scratch**
-2. Go to **OAuth & Permissions** and add these bot token scopes: `chat:write`, `app_mentions:read`, `im:history`, `im:read`, `im:write`
-3. Go to **Socket Mode** and enable it — this generates your `app_token` (`xapp-...`)
-4. Go to **Event Subscriptions**, enable events, and subscribe to `message.im` and `app_mention`
-5. Install the app to your workspace — this gives you the `bot_token` (`xoxb-...`)
+1. Create an app at [api.slack.com/apps](https://api.slack.com/apps), from scratch
+2. Add bot token scopes: `chat:write`, `app_mentions:read`, `im:history`, `im:read`, `im:write`
+3. Enable Socket Mode to get your `app_token` (`xapp-...`), then subscribe to `message.im` and `app_mention` under Event Subscriptions
+4. Install the app to your workspace, which gives you the `bot_token` (`xoxb-...`)
 
 ```yaml
 channels:
@@ -103,61 +67,51 @@ channels:
     app_token: "xapp-..."
 ```
 
-No public URL, no ngrok, no webhook server — Socket Mode handles everything over a WebSocket.
+Socket Mode means no public URL, no ngrok, no webhook server.
 
 ### Signal
 
-Signal requires `signal-cli` and a phone number. Here's a cheap way to get one:
+You need [signal-cli](https://github.com/AsamK/signal-cli) and a phone number. Cheap trick: create a free Google Voice number and register it with Signal.
 
-1. Create a [Google Voice](https://voice.google.com) account and get a free number
-2. Install `signal-cli` ([github.com/AsamK/signal-cli](https://github.com/AsamK/signal-cli))
-3. Register your Google Voice number with Signal using `signal-cli`:
-   ```bash
-   signal-cli -a +1YOURGVOICENUMBER register
-   ```
-   The verification code arrives as a text in Google Voice. Complete with:
-   ```bash
-   signal-cli -a +1YOURGVOICENUMBER verify CODE
-   ```
-4. Add to your config:
+```bash
+signal-cli -a +1YOURGVOICENUMBER register
+# verification code arrives as a text in Google Voice
+signal-cli -a +1YOURGVOICENUMBER verify CODE
+```
 
 ```yaml
 channels:
   signal:
     enabled: true
-    account: "+1YOURGVOICENUMBER"
+    account: "+1YOURGVOICENUMBER"      # the number you registered
     allowed_numbers:
       - "+1YOURPERSONALNUMBER"
 ```
 
-The `account` field is your Angel bot's phone number (the one you registered with Signal). The `allowed_numbers` field specifies who can interact with Angel—only messages from these numbers will be processed. **If `allowed_numbers` is empty or not configured, all messages are denied by default.** You must explicitly list the phone numbers that are permitted to use the bot.
-
-**Group chat security**: In Signal group chats, Angel only responds when mentioned. The `allowed_numbers` check is enforced **per-sender**, not per-group—meaning even if an unauthorized user mentions Angel in a group chat, their message is blocked. Only users whose phone numbers appear in `allowed_numbers` can trigger the bot, regardless of whether the conversation is a direct message or a group chat.
-
-**Reactions**: Angel detects emoji reactions sent via Signal. Reactions to Angel's messages are logged and stored in message history, providing context for future conversations (e.g., "User reacted 👍 to your message"). Reactions do not trigger immediate responses—they serve as passive feedback that Angel can reference in subsequent interactions. In group chats, only reactions to Angel's own messages are surfaced to reduce noise.
-
-Signal's servers relay messages, so your machine just needs to be on and running Angel.
+`allowed_numbers` is deny-by-default: leave it empty and nobody can use the bot. The check is per sender, not per group, so an unauthorized person mentioning Angel in a group chat gets ignored anyway. In groups Angel only responds when mentioned. Emoji reactions to its messages are logged as context but never trigger replies.
 
 ### iMessage
+
+macOS only. Uses the [`imsg` CLI](https://github.com/steipete/imsg): `imsg watch --json` for incoming, `imsg send` for outgoing.
 
 ```yaml
 channels:
   imessage:
     enabled: true
-    imsg_path: "imsg"   # optional
     service: "auto"     # auto | imessage | sms
-    region: "US"        # phone normalization region
-    allowed_handles:     # optional hard allowlist (phone/email handles)
+    allowed_handles:    # optional hard allowlist
       - "+14155551212"
 ```
 
-Requires macOS and the [`imsg` CLI](https://github.com/steipete/imsg). Angel uses `imsg watch --json` for incoming messages and `imsg send` for outgoing messages.
+If `allowed_handles` is unset, anyone who texts the Mac can talk to it. Keep that in mind before enabling this one. (`imsg_path` and `region` options exist, see the example config.)
 
-If `allowed_handles` is set, iMessage messages are denied by default unless the sender handle is explicitly allowlisted.
+### Telegram
+
+There's also a basic long-polling adapter: get a bot token from @BotFather and set `channels.telegram.enabled: true` plus `token`. It works, I just use it less than the others.
 
 ## Configuration
 
-Angel uses YAML configuration at `~/.angel/config`:
+Full annotated example in [`angel.config.example.yaml`](./angel.config.example.yaml). Trimmed version:
 
 ```yaml
 openai_api_key: "${OPENAI_API_KEY}"
@@ -170,121 +124,35 @@ channels:
   discord:
     enabled: true
     token: "${DISCORD_TOKEN}"
-  slack:
-    enabled: true
-    bot_token: "${SLACK_BOT_TOKEN}"
-    app_token: "${SLACK_APP_TOKEN}"
-  signal:
-    enabled: true
-    account: "+1234567890"
-
-memory:
-  reflector_enabled: true
-  reflector_interval_ms: 900000
-
-model_routing:
-  enabled: true
-  routes:
-    - context: "default"
-      model: "gpt-5.4"
-    - context: "reflector"
-      model: "gpt-5.4-mini"
 
 daily_budget:
-  enabled: false
+  enabled: false            # turn this on if the API bill scares you
   max_total_tokens: 500000
-  max_input_tokens: 350000
-  max_output_tokens: 150000
-  enforce_per_chat: false
 
-memory_quality:
-  aging_enabled: true
-  decay_half_life_days: 45
-  contradiction_detection: true
-  source_of_truth_enabled: true
-
-proactive:
-  enabled: true
-  inactivity_default_minutes: 720
-
-compaction_threshold: 40
-working_dir_isolation: "per_chat"
 data_dir: "~/.angel"
 ```
 
-Values wrapped in `${VAR}` are resolved from environment variables.
+`${VAR}` values resolve from environment variables. Memory reflection, model routing, proactive pings, and compaction all have knobs too, see the example file.
 
-### Extensibility
-
-- **Hooks**: JSON config files in `~/.angel/hooks/` with event triggers, commands, and timeouts
-- **Plugins**: Manifest-based tool and command bundles in `~/.angel/plugins/`
-- **Skills**: SKILL.md instruction files in `~/.angel/skills/`
-- **MCP Servers**: Config-driven subprocess integration with dynamic tool loading
-
-## Architecture
-
-```
-src/
-├── index.ts          Entry point
-├── agent.ts          Core message processing, tool loop, image support, onboarding
-├── llm.ts            OpenAI integration with streaming and message compaction
-├── config.ts         YAML config loading with env var resolution
-├── db.ts             SQLite layer (WAL mode, migrations)
-├── memory.ts         Memory storage, reflection, confidence scoring, file-backed memory
-├── model_router.ts   Context-aware model routing + budget guardrails
-├── policy.ts         Approval/permission policy evaluation
-├── scheduler.ts      Cron + one-shot task scheduling engine
-├── subagents.ts      Isolated child agent spawning
-├── commands.ts       Chat command routing
-├── hooks.ts          Event hook system (before_llm interception)
-├── plugins.ts        Plugin manifest loading
-├── skills.ts         Skill discovery and activation
-├── mcp.ts            Model Context Protocol server integration
-├── doctor.ts         Connectivity and accessibility diagnostics
-├── smoke.ts          Credentialed external integration smoke checks
-├── setup.ts          Interactive setup wizard
-├── channels/
-│   ├── discord.ts    Discord adapter
-│   ├── slack.ts      Slack adapter (Socket Mode)
-│   ├── imessage.ts   iMessage adapter (macOS)
-│   ├── signal.ts     Signal adapter (signal-cli, serialized stdin writes)
-│   └── types.ts      Channel interface definitions
-└── tools/
-    ├── registry.ts       Tool registration and routing
-    ├── bash.ts           Shell execution with guardrails
-    ├── files.ts          File read/write/edit/glob/grep
-    ├── web.ts            Web search and fetch
-    ├── browser.ts        Playwright browser automation
-    ├── memory.ts         Memory CRUD tools
-    ├── schedule.ts       Scheduling tools
-    ├── subagent.ts       Subagent tools
-    ├── coding_agents.ts  External coding agent integration
-    ├── confirmation.ts   Safe-word confirmation workflow
-    ├── send_message.ts   Cross-chat messaging
-    ├── advanced.ts       Goals, policies, connectors, recipes, observability, proactive tools
-    └── misc.ts           Utilities (time, todo, export, calculate)
-```
+You can extend Angel without touching code: JSON hooks in `~/.angel/hooks/`, manifest-based plugins in `~/.angel/plugins/`, SKILL.md instruction files in `~/.angel/skills/`, and MCP servers loaded dynamically via `mcp_servers` in config.
 
 ## Security
 
-- **OS sandbox (macOS)**: bash commands run inside a Seatbelt profile that denies filesystem writes outside the working directory and temp space. Set `security.sandbox: "full"` to also deny all network access from shells, or `"off"` to disable. This is the real enforcement boundary; the blocked-pattern list below is tripwire telemetry and is bypassable by design of shell syntax.
-- **Command guardrails**: 46 blocked patterns covering destructive operations, credential theft, data exfiltration, privilege escalation, and system tampering
-- **Policy engine**: deny / allow / require-confirmation rules scoped by tool, risk level, channel, user, path, and domain — high-risk tools outside direct chats fail safe when no rule matches
-- **Secret scrubbing**: OpenAI keys, Slack tokens, GitHub tokens, SSH/RSA/EC private keys automatically redacted from command output
-- **Env sanitization**: credential-bearing environment variables are stripped before spawning shells so they can't leak into LLM context
-- **File access control**: Sensitive paths (`.ssh`, `.aws`, `.gnupg`, `.env`, credentials, angel config) blocked from file tools
-- **SSRF protection**: `web_fetch` resolves hostnames itself and blocks requests landing on private/internal IP ranges, re-validating every redirect hop
-- **Safe-word system**: Configurable phrase required for dangerous operations, verified via DM
-- **Per-channel access control**: User allowlists managed via config and runtime tools
-- **Rate limiting**: per-sender message limits shared by all channels
+The blocked-command list (recursive rm on root, keychain dumps, exfiltration piping, that kind of thing) is a tripwire, not a wall. Shell syntax makes it bypassable, `curl ... | bash` isn't caught, and I won't pretend otherwise. The actual enforcement boundary on macOS is a Seatbelt profile: shells can't write outside the working directory and temp space by default. Set `security.sandbox: "full"` to also deny network access from shells, `"off"` to disable entirely.
+
+On top of that: policy rules scoped by tool, risk level, channel, user, path, and domain; safe-word confirmations over DM for dangerous ops; secret scrubbing of API keys and private keys in tool output; credential-bearing env vars stripped before shells spawn; sensitive paths like `.ssh` and `.env` off limits to file tools; SSRF protection on web_fetch that re-validates every redirect hop.
+
+## Honest limitations
+
+- The Seatbelt sandbox is macOS only. On Linux there's no OS-level boundary today, just policies and the tripwire list.
+- bash runs with your user's full privileges. Confirmations and policies raise the bar, but treat every shell call as if it were you typing it.
+- Signal depends on signal-cli staying alive and registered on the same machine.
+- Subagents cap at depth 2 and 4 concurrent. That's deliberate.
+- The Telegram adapter gets the least attention from me.
 
 ## Development
 
-```bash
-bun run dev
-```
-
-Requires Bun 1.0+. Key dependencies: openai, discord.js, @slack/bolt, cron-parser, yaml.
+Requires Bun 1.0+. Main dependencies: openai, discord.js, @slack/bolt, cron-parser, yaml. Tests with `bun test`, linting with `bun run lint` (Biome).
 
 ## License
 
