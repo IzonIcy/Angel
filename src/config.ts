@@ -35,6 +35,11 @@ export interface SignalConfig extends ChannelConfig {
 export interface TelegramConfig extends ChannelConfig {
   /** Bot token from @BotFather */
   token?: string;
+  /**
+   * Telegram numeric user ids allowed to talk to the bot. Required in
+   * practice: without entries, TelegramChannel blocks everyone (deny by
+   * default, matching Signal).
+   */
 }
 
 export interface SecurityConfig {

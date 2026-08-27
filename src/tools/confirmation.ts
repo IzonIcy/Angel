@@ -1,9 +1,5 @@
-import {
-  createPolicyBypass,
-  type Tool,
-  type ToolContext,
-  type ToolResult,
-} from "./registry";
+import { secretsMatch } from "../secrets";
+import type { Tool, ToolContext, ToolResult } from "./registry";
 
 export const requestConfirmationTool: Tool = {
   name: "request_confirmation",
@@ -125,10 +121,7 @@ export const approveConfirmationTool: Tool = {
   ): Promise<ToolResult> {
     if (!ctx.config.safe_word)
       return { output: "No safe word configured.", isError: true };
-    if (
-      input.safe_word.trim().toLowerCase() !==
-      ctx.config.safe_word.trim().toLowerCase()
-    ) {
+    if (!secretsMatch(input.safe_word, ctx.config.safe_word)) {
       return {
         output: "Incorrect safe word. Action not approved.",
         isError: true,
@@ -153,6 +146,9 @@ export const approveConfirmationTool: Tool = {
     );
 
     const toolInput = JSON.parse(row.tool_input);
+    // Re-run the policy engine against the ORIGIN chat so channel-scoped
+    // deny rules still bite after approval; the safe word only satisfies
+    // confirmation requirements, it does not override explicit denies.
     const originCtx: ToolContext = {
       chatId: row.origin_chat_id,
       channel: row.channel,
@@ -160,13 +156,13 @@ export const approveConfirmationTool: Tool = {
       db: ctx.db,
       config: ctx.config,
       registry: ctx.registry,
-      skipPolicy: createPolicyBypass(),
     };
 
     const result = await ctx.registry!.execute(
       row.tool_name,
       toolInput,
       originCtx,
+      { confirmationSatisfied: true },
     );
     return { output: `Confirmed and executed. Result:\n${result.output}` };
   },

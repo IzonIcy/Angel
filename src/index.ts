@@ -339,7 +339,12 @@ async function boot() {
     );
   }
   if (config.channels.telegram?.enabled && config.channels.telegram.token) {
-    channels.register(new TelegramChannel(config.channels.telegram.token));
+    channels.register(
+      new TelegramChannel(
+        config.channels.telegram.token,
+        config.channels.telegram.allowed_users,
+      ),
+    );
   }
 
   const messageHandler = createMessageHandler({

@@ -36,7 +36,12 @@ describe("TelegramChannel", () => {
               message: {
                 message_id: 7,
                 chat: { id: -100123, type: "group" },
-                from: { username: "ryan", first_name: "Ryan", last_name: "B" },
+                from: {
+                  id: 555,
+                  username: "ryan",
+                  first_name: "Ryan",
+                  last_name: "B",
+                },
                 text: "hello angel",
               },
             },
@@ -48,7 +53,7 @@ describe("TelegramChannel", () => {
       return fakeOk({});
     }) as typeof fetch;
 
-    const channel = new TelegramChannel("test-token");
+    const channel = new TelegramChannel("test-token", ["555"]);
     const received: Array<{
       externalChatId: string;
       chatType: string;
@@ -94,5 +99,40 @@ describe("TelegramChannel", () => {
     const send = calls.find((c) => c.url.endsWith("/sendMessage"));
     expect(send).toBeDefined();
     expect(send!.body).toEqual({ chat_id: "12345", text: "hi there" });
+  });
+
+  it("blocks messages from senders not on the allowlist", async () => {
+    let pollCount = 0;
+    globalThis.fetch = (async (url: string, init?: RequestInit) => {
+      if ((url as string).endsWith("/getMe")) return fakeOk({ id: 42 });
+      if ((url as string).endsWith("/getUpdates")) {
+        pollCount += 1;
+        if (pollCount === 1) {
+          return fakeOk([
+            {
+              update_id: 200,
+              message: {
+                message_id: 8,
+                chat: { id: -100123, type: "group" },
+                from: { id: 999, username: "stranger" },
+                text: "let me in",
+              },
+            },
+          ]);
+        }
+        throw new Error("stop polling");
+      }
+      return fakeOk({});
+    }) as typeof fetch;
+
+    const channel = new TelegramChannel("test-token", ["555"]);
+    const received: unknown[] = [];
+    await channel.start(async (msg) => {
+      received.push(msg);
+    });
+    await new Promise((r) => setTimeout(r, 50));
+    await channel.stop();
+
+    expect(received).toEqual([]);
   });
 });

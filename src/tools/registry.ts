@@ -89,6 +89,7 @@ export class ToolRegistry {
     name: string,
     input: any,
     ctx: ToolContext,
+    opts?: { confirmationSatisfied?: boolean },
   ): Promise<ToolResult> {
     const tool = this.tools.get(name);
     if (!tool) {
@@ -98,7 +99,7 @@ export class ToolRegistry {
 
     const policyDecision: PolicyDecision = ctx.skipPolicy
       ? { allowed: true, requireConfirmation: false }
-      : evaluateExecutionPolicy(tool, input, ctx);
+      : evaluateExecutionPolicy(tool, input, ctx, opts);
     if (!policyDecision.allowed) {
       const denial = {
         output:

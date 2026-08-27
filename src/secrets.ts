@@ -1,3 +1,5 @@
+import { timingSafeEqual } from "crypto";
+
 /**
  * Shared secret hygiene for tool output and spawned processes.
  *
@@ -59,4 +61,22 @@ export function sanitizedEnv(): Record<string, string> {
     env[key] = value;
   }
   return env;
+}
+
+/**
+ * Length-safe constant-time string comparison for secrets (safe words,
+ * tokens). Normalizes case and trims first so callers can't leak through
+ * a fast-fail on formatting.
+ */
+export function secretsMatch(a: string | undefined, b: string): boolean {
+  if (!a) return false;
+  const left = Buffer.from(a.trim().toLowerCase());
+  const right = Buffer.from(b.trim().toLowerCase());
+  if (left.length !== right.length) {
+    // Still burn comparable time on the mismatch so length alone isn't an
+    // oracle, then fail.
+    timingSafeEqual(left, Buffer.alloc(left.length));
+    return false;
+  }
+  return timingSafeEqual(left, right);
 }

@@ -107,7 +107,7 @@ If `allowed_handles` is unset, anyone who texts the Mac can talk to it. Keep tha
 
 ### Telegram
 
-There's also a basic long-polling adapter: get a bot token from @BotFather and set `channels.telegram.enabled: true` plus `token`. It works, I just use it less than the others.
+There's also a long-polling adapter: get a bot token from @BotFather and set `channels.telegram.enabled: true` plus `token`. Like Signal, it denies by default — set `channels.telegram.allowed_users` to the numeric Telegram user ids that may talk to the bot (find yours via @userinfobot). Without entries, nobody can reach it.
 
 ## Configuration
 

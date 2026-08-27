@@ -125,6 +125,7 @@ export async function runSetup(): Promise<void> {
         hint: "macOS + imsg CLI",
       },
       { value: "signal", label: "Signal", hint: "requires signal-cli" },
+      { value: "telegram", label: "Telegram", hint: "requires bot token" },
     ],
     required: false,
   });
@@ -196,6 +197,52 @@ export async function runSetup(): Promise<void> {
       enabled: true,
       bot_token: botToken as string,
       app_token: appToken as string,
+    };
+  }
+
+  if (selectedChannels.includes("telegram")) {
+    const token = await p.text({
+      message: "Telegram bot token",
+      placeholder: "paste your bot token",
+      initialValue: existing?.channels?.telegram?.token || "",
+      validate: (v) => {
+        if (!v?.trim()) return "Token is required for Telegram";
+      },
+    });
+    if (p.isCancel(token)) {
+      p.cancel("Setup cancelled.");
+      process.exit(0);
+    }
+
+    const allowedUsers = await p.text({
+      message: "Allowed Telegram user ids (comma-separated)",
+      placeholder: "123456789, 987654321",
+      initialValue:
+        existing?.channels?.telegram?.allowed_users?.join(",") || "",
+      validate: (v) => {
+        // Telegram blocks everyone without entries, so an empty list would
+        // produce a bot that silently ignores all messages.
+        if (!v?.trim())
+          return "At least one user id is required (Telegram denies by default)";
+        const bad = v
+          .split(",")
+          .map((s) => s.trim())
+          .filter((s) => s && !/^\d+$/.test(s));
+        if (bad.length) return `Not numeric user ids: ${bad.join(", ")}`;
+      },
+    });
+    if (p.isCancel(allowedUsers)) {
+      p.cancel("Setup cancelled.");
+      process.exit(0);
+    }
+
+    channels.telegram = {
+      enabled: true,
+      token: token as string,
+      allowed_users: (allowedUsers as string)
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean),
     };
   }
 

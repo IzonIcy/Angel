@@ -3,8 +3,13 @@ import type { ChannelAdapter, IncomingMessage, MessageHandler } from "./types";
 /**
  * Telegram Bot API channel: plain HTTPS long polling, no SDK needed.
  *
- * Requires a bot token from @BotFather. Set `enabled: true` and `token` in
- * the `telegram` section of angel.config.yaml.
+ * Requires a bot token from @BotFather. Set `enabled: true`, `token`, and
+ * `allowed_users` (Telegram numeric user ids) in the `telegram` section of
+ * angel.config.yaml.
+ *
+ * Like Signal, this channel denies by default: a bot handle is publicly
+ * discoverable, so without an allowlist anyone who finds it could chat
+ * with Angel (and reach its tools).
  */
 export class TelegramChannel implements ChannelAdapter {
   name = "telegram";
@@ -13,9 +18,11 @@ export class TelegramChannel implements ChannelAdapter {
   private token: string;
   private offset = 0;
   private abort: AbortController | null = null;
+  private readonly allowedUsers: Set<string>;
 
-  constructor(token: string) {
+  constructor(token: string, allowedUsers?: string[]) {
     this.token = token;
+    this.allowedUsers = new Set(allowedUsers ?? []);
   }
 
   private api<T>(method: string, body?: object): Promise<T> {
@@ -63,6 +70,15 @@ export class TelegramChannel implements ChannelAdapter {
           this.offset = update.update_id + 1;
           const msg = update.message;
           if (!msg?.text) continue;
+
+          // Only the stable numeric user id is allowlisted; usernames are
+          // changeable and therefore spoofable identity keys.
+          if (!this.allowedUsers.has(String(msg.from?.id))) {
+            console.warn(
+              `[angel] telegram: blocked message from non-allowlisted user ${msg.from?.id ?? "unknown"}`,
+            );
+            continue;
+          }
 
           const incoming: IncomingMessage = {
             externalChatId: String(msg.chat.id),

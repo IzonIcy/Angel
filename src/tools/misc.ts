@@ -1,6 +1,7 @@
 import { writeFileSync } from "fs";
 import { join } from "path";
 import { getRecentMessages } from "../db";
+import { secretsMatch } from "../secrets";
 import type { Tool, ToolContext, ToolResult } from "./registry";
 
 export const getCurrentTimeTool: Tool = {
@@ -256,9 +257,7 @@ export const verifySafeWordTool: Tool = {
   ): Promise<ToolResult> {
     if (!ctx.config.safe_word)
       return { output: "No safe word configured", isError: true };
-    const match =
-      input.word.trim().toLowerCase() ===
-      ctx.config.safe_word.trim().toLowerCase();
+    const match = secretsMatch(input.word, ctx.config.safe_word);
     return { output: match ? "verified" : "incorrect" };
   },
 };
@@ -266,7 +265,7 @@ export const verifySafeWordTool: Tool = {
 export const manageAllowedUsersTool: Tool = {
   name: "manage_allowed_users",
   description:
-    "Add or remove users who are allowed to interact with Angel on a specific channel. Requires safe word verification for security.",
+    "Add or remove users who are allowed to interact with Angel on a specific channel. Requires the user's safe word for security.",
   parameters: {
     type: "object",
     properties: {
@@ -284,15 +283,33 @@ export const manageAllowedUsersTool: Tool = {
         description:
           "User identifier (phone number for Signal, username for Discord, etc.)",
       },
+      safe_word: {
+        type: "string",
+        description: "The user's safe word, required for any action",
+      },
     },
-    required: ["action", "channel"],
+    required: ["action", "channel", "safe_word"],
   },
   risk: "high",
 
   async execute(
-    input: { action: string; channel: string; user_id?: string },
+    input: {
+      action: string;
+      channel: string;
+      user_id?: string;
+      safe_word?: string;
+    },
     ctx: ToolContext,
   ): Promise<ToolResult> {
+    if (!ctx.config.safe_word)
+      return { output: "No safe word configured", isError: true };
+    if (!secretsMatch(input.safe_word, ctx.config.safe_word)) {
+      return {
+        output: "Incorrect safe word. Allowlist unchanged.",
+        isError: true,
+      };
+    }
+
     if (input.action === "list") {
       const rows = ctx.db
         .query(

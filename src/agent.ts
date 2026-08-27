@@ -58,7 +58,19 @@ async function processMessageUnlocked(
   const senderDmId = opts.senderDmId;
 
   const sessionJson = loadSession(db, chatId);
-  let messages: LlmMessage[] = sessionJson ? JSON.parse(sessionJson) : [];
+  let messages: LlmMessage[] = [];
+  if (sessionJson) {
+    // A truncated/corrupt session row must not permanently brick the chat;
+    // start fresh rather than throwing on every subsequent message.
+    try {
+      const parsed = JSON.parse(sessionJson);
+      messages = Array.isArray(parsed) ? parsed : [];
+    } catch (err) {
+      console.error(
+        `[angel] corrupt session for chat ${chatId}, starting fresh: ${(err as Error).message}`,
+      );
+    }
+  }
 
   let systemPrompt = buildSystemPrompt(
     config,
@@ -116,6 +128,11 @@ Be warm and conversational, not like a form. Ask 2-3 questions at a time max. Us
     if (hookResult?.action === "block") {
       finalText = hookResult.reason || "Request blocked by hook.";
       break;
+    }
+    if (hookResult?.action === "modify" && Array.isArray(hookResult.data)) {
+      // A hook may rewrite the conversation history before it hits the LLM;
+      // the local `messages` binding is reassigned so later saves persist it.
+      messages = hookResult.data;
     }
 
     const allMessages: LlmMessage[] = [
@@ -235,7 +252,11 @@ Be warm and conversational, not like a form. Ask 2-3 questions at a time max. Us
 
       let parsed: Record<string, unknown>;
       try {
-        parsed = JSON.parse(tc.arguments) as Record<string, unknown>;
+        const rawArguments =
+          beforeTool?.action === "modify" && beforeTool.data != null
+            ? JSON.stringify(beforeTool.data)
+            : tc.arguments;
+        parsed = JSON.parse(rawArguments) as Record<string, unknown>;
       } catch {
         messages.push({
           role: "tool",

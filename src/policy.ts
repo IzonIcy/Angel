@@ -96,6 +96,7 @@ export function evaluateExecutionPolicy(
   tool: Tool,
   input: any,
   ctx: ToolContext,
+  opts?: { confirmationSatisfied?: boolean },
 ): PolicyDecision {
   // Rules are evaluated newest-first (ORDER BY id DESC) and the FIRST match
   // decides: deny wins immediately, allow wins immediately. That means a
@@ -123,6 +124,9 @@ export function evaluateExecutionPolicy(
       };
     }
     if (row.action === "require_confirmation" && !requireConfirmationMatch) {
+      // A satisfied confirmation fulfils the requirement but must not skip
+      // the rest of the scan — an explicit deny further down still applies.
+      if (opts?.confirmationSatisfied) continue;
       requireConfirmationMatch = row;
       continue;
     }
@@ -132,11 +136,13 @@ export function evaluateExecutionPolicy(
   }
 
   if (requireConfirmationMatch) {
-    return {
-      allowed: false,
-      requireConfirmation: true,
-      reason: `Confirmation required by policy "${requireConfirmationMatch.name}"`,
-    };
+    return opts?.confirmationSatisfied
+      ? { allowed: true, requireConfirmation: false }
+      : {
+          allowed: false,
+          requireConfirmation: true,
+          reason: `Confirmation required by policy "${requireConfirmationMatch.name}"`,
+        };
   }
 
   // No rule matched. Unconfigured must not mean "allow everything" in
@@ -147,12 +153,14 @@ export function evaluateExecutionPolicy(
   // where the safe-word flow itself resolves (approve_confirmation is
   // high-risk); failing closed here would brick confirmations entirely.
   if (tool.risk === "high" && !isDirectChat(ctx.channel)) {
-    return {
-      allowed: false,
-      requireConfirmation: true,
-      reason:
-        "No matching execution policy for a high-risk tool outside a direct chat",
-    };
+    if (!opts?.confirmationSatisfied) {
+      return {
+        allowed: false,
+        requireConfirmation: true,
+        reason:
+          "No matching execution policy for a high-risk tool outside a direct chat",
+      };
+    }
   }
 
   return { allowed: true, requireConfirmation: false };
