@@ -132,7 +132,7 @@ Be warm and conversational, not like a form. Ask 2-3 questions at a time max. Us
     if (hookResult?.action === "modify" && Array.isArray(hookResult.data)) {
       // A hook may rewrite the conversation history before it hits the LLM;
       // the local `messages` binding is reassigned so later saves persist it.
-      messages = hookResult.data;
+      messages = hookResult.data as unknown as LlmMessage[];
     }
 
     const allMessages: LlmMessage[] = [
@@ -276,13 +276,16 @@ Be warm and conversational, not like a form. Ask 2-3 questions at a time max. Us
         opts.usedSendMessage.value = true;
       }
 
-      await runHook(
+      const afterTool = await runHook(
         "after_tool",
         { name: tc.name, result: result.output },
         config,
       );
-
-      const output = result.output.slice(0, 50000);
+      const output = (
+        afterTool?.action === "modify" && typeof afterTool.data === "string"
+          ? afterTool.data
+          : result.output
+      ).slice(0, 50000);
       messages.push({
         role: "tool",
         tool_call_id: tc.id,

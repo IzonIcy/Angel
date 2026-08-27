@@ -1,6 +1,6 @@
 import { getObservabilitySnapshot, logSystemEvent } from "../db";
 import { getNextCronRun } from "../scheduler";
-import type { Tool, ToolContext, ToolResult } from "./registry";
+import type { JsonValue, Tool, ToolContext, ToolResult } from "./registry";
 
 type JsonObject = Record<string, unknown>;
 
@@ -119,7 +119,7 @@ function workflowTemplateSteps(
   return templates[template] || null;
 }
 
-function renderRecipeInput(value: unknown, ctx: ToolContext): unknown {
+function renderRecipeInput(value: unknown, ctx: ToolContext): JsonValue {
   if (value === "{{chat_id}}") return ctx.chatId;
   if (value === "{{channel}}") return ctx.channel;
   if (Array.isArray(value)) return value.map((v) => renderRecipeInput(v, ctx));
@@ -130,7 +130,7 @@ function renderRecipeInput(value: unknown, ctx: ToolContext): unknown {
     }
     return rendered;
   }
-  return value;
+  return value as JsonValue;
 }
 
 export const createGoalProjectTool: Tool = {

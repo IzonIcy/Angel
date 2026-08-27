@@ -1,4 +1,4 @@
-import type { Tool, ToolContext } from "./tools/registry";
+import type { JsonValue, Tool, ToolContext } from "./tools/registry";
 
 interface PolicyRow {
   id: number;
@@ -42,7 +42,7 @@ function fieldMatches(
 
 function getPathFromToolInput(
   toolName: string,
-  input: any,
+  input: JsonValue,
 ): string | undefined {
   if (!input || typeof input !== "object") return undefined;
   if (
@@ -52,21 +52,25 @@ function getPathFromToolInput(
     toolName === "glob" ||
     toolName === "grep"
   ) {
-    return input.path || undefined;
+    const obj = input as Record<string, JsonValue>;
+    return typeof obj.path === "string" ? obj.path : undefined;
   }
   return undefined;
 }
 
 function getDomainFromToolInput(
   toolName: string,
-  input: any,
+  input: JsonValue,
 ): string | undefined {
   if (!input || typeof input !== "object") return undefined;
-  if (toolName === "web_fetch" && typeof input.url === "string") {
-    try {
-      return new URL(input.url).hostname;
-    } catch {
-      return undefined;
+  if (toolName === "web_fetch") {
+    const obj = input as Record<string, JsonValue>;
+    if (typeof obj.url === "string") {
+      try {
+        return new URL(obj.url).hostname;
+      } catch {
+        return undefined;
+      }
     }
   }
   return undefined;

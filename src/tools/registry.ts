@@ -37,18 +37,28 @@ export interface ToolContext {
   skipPolicy?: PolicyBypass;
 }
 
+// JSON-serializable value for tool parameters and results
+// Using a more permissive type that matches JSON.parse output
+export type JsonValue =
+  | string
+  | number
+  | boolean
+  | null
+  | JsonValue[]
+  | { [key: string]: unknown };
+
 export interface ToolResult {
   output: string;
   isError?: boolean;
-  metadata?: Record<string, any>;
+  metadata?: Record<string, JsonValue>;
 }
 
-export interface Tool {
+export interface Tool<Input extends JsonValue = JsonValue> {
   name: string;
   description: string;
-  parameters: Record<string, any>;
+  parameters: Record<string, JsonValue>;
   risk: "low" | "medium" | "high";
-  execute(input: any, ctx: ToolContext): Promise<ToolResult>;
+  execute(input: Input, ctx: ToolContext): Promise<ToolResult>;
 }
 
 export class ToolRegistry {
@@ -87,7 +97,7 @@ export class ToolRegistry {
 
   async execute(
     name: string,
-    input: any,
+    input: JsonValue,
     ctx: ToolContext,
     opts?: { confirmationSatisfied?: boolean },
   ): Promise<ToolResult> {

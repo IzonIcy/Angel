@@ -1,11 +1,12 @@
 import { existsSync, readdirSync, readFileSync } from "fs";
 import { join } from "path";
 import type { AngelConfig } from "./config";
+import type { JsonValue } from "./tools/registry";
 
 export interface HookOutcome {
   action: "allow" | "block" | "modify";
   reason?: string;
-  data?: any;
+  data?: JsonValue;
 }
 
 interface HookDef {
@@ -53,7 +54,7 @@ function loadHooks(config: AngelConfig): HookDef[] {
 
 export async function runHook(
   event: string,
-  data: any,
+  data: JsonValue,
   config: AngelConfig,
 ): Promise<HookOutcome | null> {
   const hooks = loadHooks(config).filter((h) => h.event === event && h.enabled);
@@ -68,7 +69,7 @@ export async function runHook(
         stderr: "pipe",
       });
 
-      const stdin = proc.stdin as any;
+      const stdin = proc.stdin;
       stdin.write(JSON.stringify({ event, data }));
       stdin.end();
 
