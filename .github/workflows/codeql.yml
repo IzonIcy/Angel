@@ -1,36 +1,31 @@
 name: CodeQL
 
 on:
-  workflow_dispatch:
-  pull_request:
   push:
-    branches:
-      - main
-      - master
+    branches: [main]
+  pull_request:
+    branches: [main]
   schedule:
-    - cron: "31 7 * * 1"
+    - cron: '0 0 * * 0'
 
 permissions:
   security-events: write
-  packages: read
   actions: read
   contents: read
 
 jobs:
   analyze:
-    name: Analyze JavaScript/TypeScript
+    name: Analyze
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        language: [javascript, typescript]
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v7
-
-      - name: Initialize CodeQL
-        uses: github/codeql-action/init@v4.37.7
+      - uses: actions/checkout@v4
+      - uses: github/codeql-action/init@v3
         with:
-          languages: javascript-typescript
-
-      - name: Autobuild
-        uses: github/codeql-action/autobuild@v4.37.7
-
-      - name: Perform CodeQL Analysis
-        uses: github/codeql-action/analyze@v4.37.7
+          languages: ${{ matrix.language }}
+      - uses: github/codeql-action/analyze@v3
+        with:
+          category: "/language:${{ matrix.language }}"

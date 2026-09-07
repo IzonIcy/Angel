@@ -1,18 +1,35 @@
 version: 2
 updates:
-  - package-ecosystem: npm
+  - package-ecosystem: "npm"
     directory: "/"
     schedule:
-      interval: weekly
-    open-pull-requests-limit: 5
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
     groups:
-      patch-and-minor:
+      dev-deps:
+        patterns:
+          - "@biomejs/*"
+          - "@types/*"
+          - "husky*"
         update-types:
           - "patch"
           - "minor"
-
-  - package-ecosystem: github-actions
-    directory: "/"
-    schedule:
-      interval: weekly
-    open-pull-requests-limit: 5
+      prod-deps:
+        patterns:
+          - "@anthropic-ai/*"
+          - "@clack/*"
+          - "@slack/*"
+          - "discord.js"
+          - "openai"
+          - "yaml"
+          - "cron-parser"
+          - "picocolors"
+          - "xxhash-wasm"
+        update-types:
+          - "patch"
+          - "minor"
+    open-pull-requests-limit: 10
+    labels:
+      - "dependencies"
+      - "bun"
