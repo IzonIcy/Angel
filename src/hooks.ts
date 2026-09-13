@@ -20,7 +20,7 @@ interface HookDef {
 // Cache is keyed by hooks directory: two configs with different hooks dirs
 // (or hook files edited at runtime) must not see each other's definitions.
 // Tests rely on this too; a hooks cache from one test file must not leak
-// into another's config.
+// into another's config or bad things will happen.
 let hooksCache: { dir: string; hooks: HookDef[] } | null = null;
 
 function loadHooks(config: AngelConfig): HookDef[] {

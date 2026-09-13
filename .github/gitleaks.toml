@@ -1,0 +1,43 @@
+[allowlist]
+description = "Gitleaks allowlist for Angel"
+files = [
+  "(.*?)(test|spec|mock|fixture)(.*?)\\.(ts|json)$",
+  ".*\\.env\\.example$",
+]
+commits = []
+paths = []
+
+[[rules]]
+description = "Discord Bot Token"
+regex = '''(?i)(discord[_-]?token|bot[_-]?token)\\s*[:=]\\s*["']?[a-zA-Z0-9\\-_\\.]{50,}["']?'''
+tags = ["discord", "token"]
+
+[[rules]]
+description = "Slack Bot Token"
+regex = '''(?i)(slack[_-]?bot[_-]?token|xoxb-)[a-zA-Z0-9\\-]{40,}'''
+tags = ["slack", "token"]
+
+[[rules]]
+description = "OpenAI API Key"
+regex = '''(?i)sk-[a-zA-Z0-9]{48,}'''
+tags = ["openai", "key"]
+
+[[rules]]
+description = "Anthropic API Key"
+regex = '''(?i)sk-ant-[a-zA-Z0-9\\-_]{95,}'''
+tags = ["anthropic", "key"]
+
+[[rules]]
+description = "Generic API Key"
+regex = '''(?i)(api[_-]?key|apikey)\\s*[:=]\\s*["']?[a-zA-Z0-9\\-_]{20,}["']?'''
+tags = ["key", "api"]
+
+[[rules]]
+description = "Database URL"
+regex = '''(?i)(database[_-]?url|postgres(?:ql)?://)[^\\s"']+'''
+tags = ["database", "url"]
+
+[[rules]]
+description = "Generic Secret"
+regex = '''(?i)(secret|password|passwd|pwd)\\s*[:=]\\s*["']?[a-zA-Z0-9\\-_]{8,}["']?'''
+tags = ["secret", "password"]
