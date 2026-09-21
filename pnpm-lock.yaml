@@ -9,17 +9,17 @@ importers:
   .:
     dependencies:
       '@anthropic-ai/sdk':
-        specifier: ^0.125.0
-        version: 0.125.0
+        specifier: ^0.126.0
+        version: 0.126.0
       '@clack/prompts':
-        specifier: ^1.8.0
-        version: 1.8.0
+        specifier: ^1.8.1
+        version: 1.8.1
       '@slack/bolt':
         specifier: ^5.0.0
         version: 5.1.0(@types/express@5.0.6)(undici@7.29.1)
       cron-parser:
-        specifier: ^5.5.0
-        version: 5.10.0
+        specifier: ^5.10.1
+        version: 5.10.1
       discord.js:
         specifier: ^14.26.4
         version: 14.27.0
@@ -27,8 +27,8 @@ importers:
         specifier: ^9.0.4
         version: 9.0.4
       openai:
-        specifier: ^7.15.0
-        version: 7.15.0(undici@7.29.1)(ws@8.21.3)
+        specifier: ^7.18.0
+        version: 7.18.0(undici@7.29.1)(ws@8.21.3)
       pg:
         specifier: ^8.16.3
         version: 8.23.0
@@ -57,8 +57,8 @@ importers:
 
 packages:
 
-  '@anthropic-ai/sdk@0.125.0':
-    resolution: {integrity: sha512-Hq5wYlXupzJ9M1Fzqjqa3hObcuigEXVZJqSYDgeZGM3wF4qrNERM5Z1OOAeoT9rlod8awJ3uYyJjbQXp1ckIGg==}
+  '@anthropic-ai/sdk@0.126.0':
+    resolution: {integrity: sha512-VhiZl6rA/8uC+MgDaOhEcAWaIZ2tPnIY885jlZqxrGrutUW2nqCtophBtlsX0tk5kChBUjV/1NVjL3y0M4OwUg==}
     hasBin: true
     peerDependencies:
       zod: ^3.25.0 || ^4.0.0
@@ -127,12 +127,12 @@ packages:
     cpu: [x64]
     os: [win32]
 
-  '@clack/core@1.5.0':
-    resolution: {integrity: sha512-zNikCcd8BbcEvzzG1sbXFrRHFk5kHPrpwZwksPvf9qyQO1Teb7JaXaOAxXZei9nZLDW0gaZawiuTCji88bTBhw==}
+  '@clack/core@1.5.1':
+    resolution: {integrity: sha512-iHTrHA8MtVuLl2TfZySmcKv1qO2PoyC9Z7pfSDozEuV5vtY3/wcOPKJXlqJ5Oq2Cx5DDGQGAMVx6HZfRRoVEbQ==}
     engines: {node: '>= 20.12.0'}
 
-  '@clack/prompts@1.8.0':
-    resolution: {integrity: sha512-PXzLZ8N34rxmuo4dJg3xtOXhcBse94qGjDqsteoEYrFrrZ5FSjIGwMAuOcv64ln8rHVBBD06XeVGr+/JX+plcA==}
+  '@clack/prompts@1.8.1':
+    resolution: {integrity: sha512-dlT1m5e/0yUL0kRNcQn7yGLVThkgbB0Ga/1AmfDDC/8ik6AIiSf2QLQO2zPYvefsHP0aFgxO93cVLCCfDp7kzQ==}
     engines: {node: '>= 20.12.0'}
 
   '@discordjs/builders@1.14.1':
@@ -310,8 +310,8 @@ packages:
     resolution: {integrity: sha512-yki5XnKuf750l50uGTllt6kKILY4nQ1eNIQatoXEByZ5dWgnKqbnqmTrBE5B4N7lrMJKQ2ytWMiTO2o0v6Ew/w==}
     engines: {node: '>= 0.6'}
 
-  cron-parser@5.10.0:
-    resolution: {integrity: sha512-izNAxJyRWUP8ljBoDSub5WyrVOUlT4SLGShswE7eoRBpp6QUsSycYxLBMJlbshgPBMcPT/nrfgjNY2918ayv2A==}
+  cron-parser@5.10.1:
+    resolution: {integrity: sha512-pKRrRagItwk9rGIStcUyMxFX34x56zoX3KDf9HJ4ttwkXIK1qxK63EvXvEDmlxI9AdPJ+Y7TEKRftRlW5eSS7A==}
     engines: {node: '>=18'}
 
   css-select@5.2.2:
@@ -570,8 +570,8 @@ packages:
   once@1.4.0:
     resolution: {integrity: sha512-lNaJgI+2Q5URQBkccEKHTQOPaXdUxnZZElQTZY0MFUAuaEqe1E+Nyvgdz/aIyNi6Z9MzO5dv1H8n58/GELp3+w==}
 
-  openai@7.15.0:
-    resolution: {integrity: sha512-2DIwesnPSduw68MFx7nAdgvshrgvS8WOan5W8+tgUMlAy/tY+Q41g80Pa+w/v64rHA6rtn+dketa8QvMVxU96w==}
+  openai@7.18.0:
+    resolution: {integrity: sha512-S+xxaUf9VzIHEPDUpUFnRgvR2Ho0K1yZEaSJ8gd7xQlCNm4sdOD7/QaKWLRTYK3MK6KhwpD3cOEC0F4OPG698A==}
     engines: {node: '>=22.0.0'}
     peerDependencies:
       '@aws-sdk/credential-provider-node': '>=3.972.0 <4'
@@ -815,7 +815,7 @@ packages:
 
 snapshots:
 
-  '@anthropic-ai/sdk@0.125.0':
+  '@anthropic-ai/sdk@0.126.0':
     dependencies:
       json-schema-to-ts: 3.1.1
       standardwebhooks: 1.1.1
@@ -857,14 +857,14 @@ snapshots:
   '@biomejs/cli-win32-x64@2.5.12':
     optional: true
 
-  '@clack/core@1.5.0':
+  '@clack/core@1.5.1':
     dependencies:
       fast-wrap-ansi: 0.2.2
       sisteransi: 1.0.5
 
-  '@clack/prompts@1.8.0':
+  '@clack/prompts@1.8.1':
     dependencies:
-      '@clack/core': 1.5.0
+      '@clack/core': 1.5.1
       fast-string-width: 3.0.2
       fast-wrap-ansi: 0.2.2
       sisteransi: 1.0.5
@@ -1095,7 +1095,7 @@ snapshots:
 
   cookie@0.7.2: {}
 
-  cron-parser@5.10.0:
+  cron-parser@5.10.1:
     dependencies:
       luxon: 3.7.2
 
@@ -1386,7 +1386,7 @@ snapshots:
     dependencies:
       wrappy: 1.0.2
 
-  openai@7.15.0(undici@7.29.1)(ws@8.21.3):
+  openai@7.18.0(undici@7.29.1)(ws@8.21.3):
     optionalDependencies:
       undici: 7.29.1
       ws: 8.21.3
