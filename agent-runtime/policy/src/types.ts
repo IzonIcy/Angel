@@ -22,8 +22,9 @@ export interface PolicyContext {
   /** Channel identifier (e.g., "discord_dm", "slack_channel", "signal_private") */
   channel: string | undefined;
 
-  /** Actor/user identifier within the channel */
-  actorId: string | undefined;
+  /** Actor/user identifier within the channel. Absent means "no actor", which
+   *  is distinct from an empty string only for a rule that patterns on it. */
+  actorId?: string;
 
   /** Working directory for path-based rules */
   workingDir: string;
