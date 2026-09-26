@@ -2,10 +2,10 @@
  * SQLite PolicyStore implementation
  *
  * For Angel compatibility — uses the same schema as Angel's execution_policies table.
- * Requires a better-sqlite3 compatible database instance.
+ * Backed by bun:sqlite, which is what Angel's own db.ts uses.
  */
 
-import type { Database } from "better-sqlite3";
+import { Database } from "bun:sqlite";
 import type {
   CreatePolicyRuleInput,
   PolicyRule,
@@ -22,18 +22,33 @@ export interface SqlitePolicyStoreOptions {
 
 const DEFAULT_TABLE = "execution_policies";
 
+/**
+ * The table name is interpolated into every query, so it is never a bound
+ * parameter and must be validated as a plain SQL identifier instead.
+ */
+const VALID_TABLE_NAME = /^[A-Za-z_][A-Za-z0-9_]*$/;
+
+function assertValidTableName(tableName: string): void {
+  if (!VALID_TABLE_NAME.test(tableName)) {
+    throw new Error(
+      `Invalid table name: ${JSON.stringify(tableName)}. Must match ${VALID_TABLE_NAME.source}`,
+    );
+  }
+}
+
 export class SqlitePolicyStore implements PolicyStore {
   private db: Database;
   private tableName: string;
 
   constructor(options: SqlitePolicyStoreOptions) {
+    assertValidTableName(options.tableName ?? DEFAULT_TABLE);
     this.db = options.db;
     this.tableName = options.tableName ?? DEFAULT_TABLE;
   }
 
   async listEnabled(): Promise<PolicyRule[]> {
     const rows = this.db
-      .prepare(
+      .query(
         `SELECT id, name, type, action, enabled, tool_name, risk_level, channel, actor_id, path_pattern, domain_pattern, note, created_at, updated_at
          FROM ${this.tableName}
          WHERE enabled = 1
@@ -46,7 +61,7 @@ export class SqlitePolicyStore implements PolicyStore {
 
   async getById(id: string): Promise<PolicyRule | null> {
     const row = this.db
-      .prepare(
+      .query(
         `SELECT id, name, type, action, enabled, tool_name, risk_level, channel, actor_id, path_pattern, domain_pattern, note, created_at, updated_at
          FROM ${this.tableName}
          WHERE id = ?`,
@@ -61,7 +76,7 @@ export class SqlitePolicyStore implements PolicyStore {
     const now = nowIso();
 
     this.db
-      .prepare(
+      .query(
         `INSERT INTO ${this.tableName} (id, name, type, action, enabled, tool_name, risk_level, channel, actor_id, path_pattern, domain_pattern, note, created_at, updated_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
@@ -162,14 +177,14 @@ export class SqlitePolicyStore implements PolicyStore {
     params.push(id);
 
     this.db
-      .prepare(`UPDATE ${this.tableName} SET ${sets.join(", ")} WHERE id = ?`)
+      .query(`UPDATE ${this.tableName} SET ${sets.join(", ")} WHERE id = ?`)
       .run(...params);
 
     return updated;
   }
 
   async delete(id: string): Promise<void> {
-    this.db.prepare(`DELETE FROM ${this.tableName} WHERE id = ?`).run(id);
+    this.db.query(`DELETE FROM ${this.tableName} WHERE id = ?`).run(id);
   }
 }
 
