@@ -122,7 +122,6 @@ export class SqlitePolicyStore implements PolicyStore {
     }
 
     const now = nowIso();
-    const updated: PolicyRule = { ...existing, ...patch, updatedAt: now };
 
     const sets: string[] = [];
     const params: (string | number | null)[] = [];
@@ -180,7 +179,15 @@ export class SqlitePolicyStore implements PolicyStore {
       .query(`UPDATE ${this.tableName} SET ${sets.join(", ")} WHERE id = ?`)
       .run(...params);
 
-    return updated;
+    // Re-read rather than assembling the return value from `patch`. Building it
+    // here would duplicate the field mapping above, and the two could drift —
+    // a field added to the SET clause but not the object would be reported as
+    // saved when it was never written. Reading back makes that impossible.
+    const stored = await this.getById(id);
+    if (!stored) {
+      throw new Error(`Policy rule disappeared during update: ${id}`);
+    }
+    return stored;
   }
 
   async delete(id: string): Promise<void> {
