@@ -142,6 +142,62 @@ describe("SqlitePolicyStore - CRUD", () => {
     expect((await store.getById(created.id))?.enabled).toBe(false);
   });
 
+  test("update returns exactly what was persisted, not what was requested", async () => {
+    const db = makeDb();
+    const local = new SqlitePolicyStore({ db });
+    const created = await local.create({
+      name: "before",
+      type: "permission",
+      action: "allow",
+      toolName: "bash",
+      note: "original note",
+    });
+
+    const returned = await local.update(created.id, {
+      name: "after",
+      action: "deny",
+      note: null,
+    });
+
+    // the returned object must equal the stored row, field for field
+    const persisted = await local.getById(created.id);
+    expect(returned).toEqual(persisted);
+    expect(returned.name).toBe("after");
+    expect(returned.action).toBe("deny");
+    expect(returned.note).toBeNull();
+    // untouched fields survive
+    expect(returned.toolName).toBe("bash");
+    expect(returned.type).toBe("permission");
+    // and it is genuinely the stored value, not an echo of the patch
+    const raw = db
+      .query(
+        "SELECT name, action, note, tool_name FROM execution_policies WHERE id = ?",
+      )
+      .get(created.id);
+    expect(raw).toEqual({
+      name: "after",
+      action: "deny",
+      note: null,
+      tool_name: "bash",
+    });
+  });
+
+  test("update sets updatedAt without disturbing createdAt", async () => {
+    const created = await store.create({
+      name: "t",
+      type: "permission",
+      action: "allow",
+    });
+    await new Promise((resolve) => setTimeout(resolve, 5));
+
+    const updated = await store.update(created.id, { name: "t2" });
+
+    expect(updated.createdAt).toBe(created.createdAt);
+    expect(Date.parse(updated.updatedAt)).toBeGreaterThan(
+      Date.parse(created.updatedAt),
+    );
+  });
+
   test("update on unknown id rejects", async () => {
     expect(store.update("missing", { name: "x" })).rejects.toThrow(
       /not found/i,
